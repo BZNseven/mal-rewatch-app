@@ -1,3 +1,4 @@
+// netlify/functions/auth-start.js
 const crypto = require("crypto");
 
 exports.handler = async (event) => {
@@ -19,7 +20,7 @@ exports.handler = async (event) => {
     authorize.search = new URLSearchParams({
       response_type: "code",
       client_id: clientId,
-      code_challenge: codeVerifier,
+      code_challenge: codeVerifier,           // PKCE "plain"
       code_challenge_method: "plain",
       state,
       redirect_uri: redirectUri,
@@ -27,8 +28,8 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 302,
-      headers: {
-        Location: authorize.toString(),
+      headers: { Location: authorize.toString() },
+      multiValueHeaders: {
         "Set-Cookie": [
           `pkce_verifier=${codeVerifier}; Max-Age=600; HttpOnly; Secure; SameSite=Lax; Path=/`,
           `oauth_state=${state}; Max-Age=600; HttpOnly; Secure; SameSite=Lax; Path=/`,
