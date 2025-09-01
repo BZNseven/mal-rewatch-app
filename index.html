@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body { font-family: system-ui, sans-serif; margin: 2rem; }
-    button { padding: .6rem 1rem; border-radius: .5rem; border: 1px solid #ccc; cursor: pointer; }
+    button { padding: .6rem 1rem; border-radius: .5rem; border: 1px solid #ccc; cursor: pointer; margin-right:.5rem; }
     table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
     th, td { border: 1px solid #ddd; padding: .5rem; }
     th { background: #f7f7f7; text-align: left; }
@@ -34,6 +34,8 @@
     <button id="exportCsv">Download CSV</button>
     <button id="exportMd">Download Markdown</button>
     <button id="copyMd">Copy Markdown</button>
+    <button id="debug">Debug Counts</button>
+    <button id="missing">Explain Missing</button>
   </div>
 
   <table id="tbl" style="display:none;">
@@ -46,9 +48,11 @@
   </table>
 
 <script>
-let LAST_ROWS = [];
-let LAST_DETAILS = new Map(); // id -> details
+let LAST_ROWS = [];           // filtered + sorted rows currently shown
+let LAST_DETAILS = new Map(); // id -> details (genres/studios/etc)
+let LAST_ALL_ITEMS = [];      // raw items from MAL (unfiltered)
 
+// ——— helpers ———
 async function logout() {
   await fetch("/api/logout");
   document.getElementById("status").textContent = "Logged out.";
@@ -56,11 +60,25 @@ async function logout() {
 
 function tokenHasTag(listStatus, tagToken) {
   if (!listStatus || !listStatus.tags) return false;
+  // MAL returns tags as an array of strings. We normalize to tokens.
   return listStatus.tags
     .join(",")
     .split(",")
     .map(s => s.trim().toLowerCase())
     .includes(tagToken.toLowerCase());
+}
+
+function splitTags(listStatus) {
+  if (!listStatus || !listStatus.tags) return [];
+  return listStatus.tags
+    .join(",")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function statusName(s) {
+  return (s || "").toLowerCase() || "unknown";
 }
 
 async function fetchAllList() {
@@ -165,6 +183,7 @@ function generateMarkdown(rows, detailsMap) {
   return lines.join("\n");
 }
 
+// ——— main actions ———
 document.getElementById("load").addEventListener("click", async () => {
   try {
     document.getElementById("status").textContent = "Loading…";
@@ -175,6 +194,7 @@ document.getElementById("load").addEventListener("click", async () => {
     const tagToken = document.getElementById("tagToken").value;
 
     const items = await fetchAllList();
+    LAST_ALL_ITEMS = items.slice(); // keep raw set for diagnostics ✅
 
     // Filter to exact tag + (optional) completed
     const filt = items.filter(x => {
@@ -211,6 +231,7 @@ document.getElementById("load").addEventListener("click", async () => {
   }
 });
 
+// Exports
 document.getElementById("exportCsv").addEventListener("click", () => {
   if (!LAST_ROWS.length) return (document.getElementById("status").textContent = "Load the list first.");
   const csv = generateCSV(LAST_ROWS, LAST_DETAILS);
@@ -230,7 +251,6 @@ document.getElementById("copyMd").addEventListener("click", async () => {
     await navigator.clipboard.writeText(md);
     document.getElementById("status").textContent = "Markdown copied to clipboard.";
   } catch {
-    // Fallback for hardened browsers
     const ta = document.createElement("textarea");
     ta.value = md;
     document.body.appendChild(ta);
@@ -239,6 +259,55 @@ document.getElementById("copyMd").addEventListener("click", async () => {
     ta.remove();
     document.getElementById("status").textContent = ok ? "Markdown copied (fallback)." : "Clipboard blocked — use Download Markdown instead.";
   }
+});
+
+// ——— diagnostics ———
+document.getElementById("debug").addEventListener("click", () => {
+  if (!LAST_ALL_ITEMS.length) {
+    document.getElementById("status").textContent = "Load the list first.";
+    return;
+  }
+  const tagToken = document.getElementById("tagToken").value.toLowerCase();
+
+  // count all tag tokens seen (across entire list)
+  const tagCounts = new Map();   // token -> count
+  const statusCounts = new Map(); // for items that match the selected tag
+  for (const it of LAST_ALL_ITEMS) {
+    const tags = splitTags(it.list_status).map(t => t.toLowerCase());
+    for (const t of tags) tagCounts.set(t, (tagCounts.get(t)||0) + 1);
+    if (tags.includes(tagToken)) {
+      const st = statusName(it.list_status && it.list_status.status);
+      statusCounts.set(st, (statusCounts.get(st)||0) + 1);
+    }
+  }
+  const tagLines = [...tagCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([t,c])=>`${t||"(empty)"}: ${c}`).join(" • ");
+  const stLines  = [...statusCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([s,c])=>`${s}: ${c}`).join(" • ");
+
+  document.getElementById("status").textContent =
+    `Tag variants seen → ${tagLines || "none"}  ||  By status for “${tagToken}” → ${stLines || "none"}`;
+});
+
+document.getElementById("missing").addEventListener("click", () => {
+  if (!LAST_ALL_ITEMS.length) {
+    document.getElementById("status").textContent = "Load the list first.";
+    return;
+  }
+  const gateCompleted = document.getElementById("gateCompleted").checked;
+  const tagToken = document.getElementById("tagToken").value.toLowerCase();
+
+  const reasons = { notCompleted: [], tagMismatch: [] };
+  for (const it of LAST_ALL_ITEMS) {
+    const ls = it.list_status || {};
+    const tags = splitTags(ls).map(t => t.toLowerCase());
+    const hasTag = tags.includes(tagToken);
+    const done = ls.status && ls.status.toLowerCase() === "completed";
+    if (!hasTag) reasons.tagMismatch.push(it.node.title_english || it.node.title || `ID ${it.node.id}`);
+    else if (gateCompleted && !done) reasons.notCompleted.push(it.node.title_english || it.node.title || `ID ${it.node.id}`);
+  }
+
+  const top5 = (arr) => arr.slice(0,5).join(" | ") + (arr.length > 5 ? ` …(+${arr.length-5})` : "");
+  document.getElementById("status").textContent =
+    `Excluded — Tag mismatch: ${reasons.tagMismatch.length} (e.g., ${top5(reasons.tagMismatch)}) | Not completed: ${reasons.notCompleted.length} (e.g., ${top5(reasons.notCompleted)})`;
 });
 </script>
 </body>
