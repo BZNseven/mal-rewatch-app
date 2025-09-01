@@ -10,7 +10,7 @@
     table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
     th, td { border: 1px solid #ddd; padding: .5rem; }
     th { background: #f7f7f7; text-align: left; }
-    .muted { color: #777; }
+    .muted { color: #777; margin-left: .5rem; }
   </style>
 </head>
 <body>
@@ -31,6 +31,9 @@
       </select>
     </label>
     <button id="load">Load List</button>
+    <button id="exportCsv">Download CSV</button>
+    <button id="exportMd">Download Markdown</button>
+    <button id="copyMd">Copy Markdown</button>
   </div>
 
   <table id="tbl" style="display:none;">
@@ -43,6 +46,9 @@
   </table>
 
 <script>
+let LAST_ROWS = [];
+let LAST_DETAILS = new Map(); // id -> details
+
 async function logout() {
   await fetch("/api/logout");
   document.getElementById("status").textContent = "Logged out.";
@@ -82,9 +88,89 @@ async function enrichOne(id) {
   return r.json();
 }
 
+function toDisplayRow(row, details) {
+  const n = row.node;
+  const ls = row.list_status || {};
+  const d = details || {};
+  const title = n.title_english || n.title || "—";
+  const score = (ls.score && ls.score !== 0) ? ls.score : "—";
+  const genresArr = (d.genres || []).slice(0,3).map(g => g.name);
+  const studiosArr = (d.studios || []).slice(0,2).map(s => s.name);
+  const year = (d.start_season && d.start_season.year) ? d.start_season.year : "";
+  const type = d.media_type || n.media_type || "";
+  const ep = (typeof d.num_episodes === "number") ? d.num_episodes : (n.num_episodes || "");
+  const link = `https://myanimelist.net/anime/${n.id}`;
+  return { title, score, genresArr, year, type, ep, studiosArr, link, id: n.id };
+}
+
+function render(rows, detailsMap) {
+  const tbody = document.querySelector("#tbl tbody");
+  tbody.innerHTML = "";
+  for (const row of rows) {
+    const d = detailsMap.get(row.node.id);
+    const v = toDisplayRow(row, d);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${v.title}</td>
+      <td style="text-align:right">${v.score}</td>
+      <td>${v.genresArr.join(", ")}</td>
+      <td style="text-align:right">${v.year||""}</td>
+      <td>${v.type||""}</td>
+      <td style="text-align:right">${v.ep||""}</td>
+      <td>${v.studiosArr.join(", ")}</td>
+      <td><a href="${v.link}" target="_blank">MAL</a></td>`;
+    tbody.appendChild(tr);
+  }
+  document.getElementById("tbl").style.display = "";
+}
+
+function download(filename, text, mime) {
+  const blob = new Blob([text], { type: mime || "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function generateCSV(rows, detailsMap) {
+  const headers = ["Title","My Score","Genres","Year","Type","Ep","Studios","Link"];
+  const lines = [headers.join(",")];
+  for (const row of rows) {
+    const v = toDisplayRow(row, detailsMap.get(row.node.id));
+    const title = `"${(v.title || "").replace(/"/g, '""')}"`;
+    const score = v.score === "—" ? "" : v.score;
+    const genres = `"${v.genresArr.join("; ").replace(/"/g, '""')}"`;
+    const studios = `"${v.studiosArr.join("; ").replace(/"/g, '""')}"`;
+    const year = v.year || "";
+    const type = `"${(v.type||"").replace(/"/g, '""')}"`;
+    const ep = v.ep || "";
+    const link = v.link;
+    lines.push([title, score, genres, year, type, ep, studios, link].join(","));
+  }
+  return lines.join("\n");
+}
+
+function generateMarkdown(rows, detailsMap) {
+  const header = "| Title | My Score | Genres | Year | Type | Ep | Studios | Link |\n|---|---:|---|---:|---|---:|---|---|";
+  const lines = [header];
+  for (const row of rows) {
+    const v = toDisplayRow(row, detailsMap.get(row.node.id));
+    const score = v.score === "—" ? "—" : String(v.score);
+    lines.push(`| ${v.title} | ${score} | ${v.genresArr.join(", ")} | ${v.year||""} | ${v.type||""} | ${v.ep||""} | ${v.studiosArr.join(", ")} | ${v.link} |`);
+  }
+  return lines.join("\n");
+}
+
 document.getElementById("load").addEventListener("click", async () => {
   try {
     document.getElementById("status").textContent = "Loading…";
+    LAST_ROWS = [];
+    LAST_DETAILS = new Map();
+
     const gateCompleted = document.getElementById("gateCompleted").checked;
     const tagToken = document.getElementById("tagToken").value;
 
@@ -98,48 +184,60 @@ document.getElementById("load").addEventListener("click", async () => {
       return hasTag && done;
     });
 
-    // Top by score (show 20 as demo)
-    const top = filt.slice().sort((a,b) => (b.list_status.score||0) - (a.list_status.score||0)).slice(0, 20);
+    // Sort by score desc (0 lowest), then title asc
+    const rows = filt.slice().sort((a,b) => {
+      const sa = a.list_status.score || 0, sb = b.list_status.score || 0;
+      if (sb !== sa) return sb - sa;
+      const ta = (a.node.title_english || a.node.title || "").toLowerCase();
+      const tb = (b.node.title_english || b.node.title || "").toLowerCase();
+      return ta.localeCompare(tb);
+    });
 
-    // Enrich
-    const enriched = await Promise.all(top.map(async (x) => {
-      const id = x.node.id;
-      const d = await enrichOne(id);
-      return { raw: x, details: d };
-    }));
+    LAST_ROWS = rows;
 
-    // Render
-    const tbody = document.querySelector("#tbl tbody");
-    tbody.innerHTML = "";
-    for (const row of enriched) {
-      const n = row.raw.node;
-      const ls = row.raw.list_status || {};
-      const d = row.details || {};
-      const title = n.title_english || n.title || "—";
-      const score = (ls.score && ls.score !== 0) ? ls.score : "—";
-      const genres = (d.genres || []).slice(0,3).map(g => g.name).join(", ");
-      const studios = (d.studios || []).slice(0,2).map(s => s.name).join(", ");
-      const year = (d.start_season && d.start_season.year) ? d.start_season.year : "";
-      const type = d.media_type || n.media_type || "";
-      const ep = (typeof d.num_episodes === "number") ? d.num_episodes : (n.num_episodes || "");
-      const link = `https://myanimelist.net/anime/${n.id}`;
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${title}</td>
-        <td style="text-align:right">${score}</td>
-        <td>${genres}</td>
-        <td style="text-align:right">${year||""}</td>
-        <td>${type||""}</td>
-        <td style="text-align:right">${ep||""}</td>
-        <td>${studios}</td>
-        <td><a href="${link}" target="_blank">MAL</a></td>`;
-      tbody.appendChild(tr);
+    // Enrich a safe chunk to avoid rate limits
+    const MAX_DETAILS = 50;
+    const toEnrich = rows.slice(0, MAX_DETAILS);
+    for (const x of toEnrich) {
+      const d = await enrichOne(x.node.id);
+      if (d) LAST_DETAILS.set(x.node.id, d);
     }
-    document.getElementById("tbl").style.display = "";
-    document.getElementById("status").textContent = `Loaded ${filt.length} items; showing ${enriched.length}.`;
+
+    render(rows, LAST_DETAILS);
+    document.getElementById("status").textContent =
+      `Loaded ${filt.length} items; showing ${rows.length}. Details fetched for ${LAST_DETAILS.size}.`;
   } catch (e) {
     document.getElementById("status").textContent = e.message || "Error.";
+  }
+});
+
+document.getElementById("exportCsv").addEventListener("click", () => {
+  if (!LAST_ROWS.length) return (document.getElementById("status").textContent = "Load the list first.");
+  const csv = generateCSV(LAST_ROWS, LAST_DETAILS);
+  download("rewatch_list.csv", csv, "text/csv;charset=utf-8;");
+});
+
+document.getElementById("exportMd").addEventListener("click", () => {
+  if (!LAST_ROWS.length) return (document.getElementById("status").textContent = "Load the list first.");
+  const md = generateMarkdown(LAST_ROWS, LAST_DETAILS);
+  download("rewatch_list.md", md, "text/markdown;charset=utf-8;");
+});
+
+document.getElementById("copyMd").addEventListener("click", async () => {
+  if (!LAST_ROWS.length) return (document.getElementById("status").textContent = "Load the list first.");
+  const md = generateMarkdown(LAST_ROWS, LAST_DETAILS);
+  try {
+    await navigator.clipboard.writeText(md);
+    document.getElementById("status").textContent = "Markdown copied to clipboard.";
+  } catch {
+    // Fallback for hardened browsers
+    const ta = document.createElement("textarea");
+    ta.value = md;
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    document.getElementById("status").textContent = ok ? "Markdown copied (fallback)." : "Clipboard blocked — use Download Markdown instead.";
   }
 });
 </script>
