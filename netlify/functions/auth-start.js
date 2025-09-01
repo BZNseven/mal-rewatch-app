@@ -1,4 +1,6 @@
-// netlify/functions/auth-start.js
+// Starts MAL OAuth (PKCE "plain") and sets short-lived cookies.
+// Uses multiValueHeaders for multiple Set-Cookie values.
+
 const crypto = require("crypto");
 
 exports.handler = async (event) => {
