@@ -1,3 +1,4 @@
+// netlify/functions/auth-callback.js
 const fetch = (...args) => import("node-fetch").then(({default: f}) => f(...args));
 
 function parseCookies(cookieHeader = "") {
@@ -37,7 +38,7 @@ exports.handler = async (event) => {
       grant_type: "authorization_code",
       code,
       redirect_uri: redirectUri,
-      code_verifier: verifier,
+      code_verifier: verifier,  // PKCE "plain"
     });
 
     const resp = await fetch("https://myanimelist.net/v1/oauth2/token", {
@@ -51,18 +52,20 @@ exports.handler = async (event) => {
     }
     const json = await resp.json();
 
-    const cookiesOut = [];
+    const cookieList = [];
     const maxAge = Math.max(60, (json.expires_in || 3600) - 60);
-    cookiesOut.push(`mal_access=${json.access_token}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax; Path=/`);
+    cookieList.push(`mal_access=${json.access_token}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax; Path=/`);
     if (json.refresh_token) {
-      cookiesOut.push(`mal_refresh=${json.refresh_token}; Max-Age=${60*60*24*30}; HttpOnly; Secure; SameSite=Lax; Path=/`);
+      cookieList.push(`mal_refresh=${json.refresh_token}; Max-Age=${60*60*24*30}; HttpOnly; Secure; SameSite=Lax; Path=/`);
     }
-    cookiesOut.push(`pkce_verifier=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`);
-    cookiesOut.push(`oauth_state=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`);
+    // Clear one-time cookies
+    cookieList.push(`pkce_verifier=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`);
+    cookieList.push(`oauth_state=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`);
 
     return {
       statusCode: 302,
-      headers: { Location: "/", "Set-Cookie": cookiesOut },
+      headers: { Location: "/" },
+      multiValueHeaders: { "Set-Cookie": cookieList },
     };
   } catch (e) {
     return { statusCode: 500, body: e.message || "Auth callback error" };
