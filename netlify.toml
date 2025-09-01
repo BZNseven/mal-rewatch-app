@@ -1,16 +1,13 @@
 [functions]
 directory = "netlify/functions"
 
+# Friendly URL → function for starting OAuth
 [[redirects]]
 from = "/auth/start"
 to = "/.netlify/functions/auth-start"
 status = 200
 
-[[redirects]]
-from = "/.netlify/functions/auth-callback"
-to = "/.netlify/functions/auth-callback"
-status = 200
-
+# Proxy all /api/* to our function
 [[redirects]]
 from = "/api/*"
 to = "/.netlify/functions/mal-proxy"
