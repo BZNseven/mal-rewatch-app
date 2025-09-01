@@ -374,17 +374,66 @@ document.getElementById("xmlDiff").addEventListener("click", async () => {
   const rows = parseMalXML(text);
   if (!rows.length) { document.getElementById("diag").textContent = "Could not parse XML."; return; }
 
-  // XML set: exact 'Rewatch' tag + Completed (robust split)
-  const xmlRewatch = new Set();
-  const xmlMap = new Map();
+  // XML set: exact 'Rewatch' tag + Completed
+  const xmlRewatchCompleted = new Set();
+  const xmlTitleById = new Map();
   for (const r of rows) {
-    const hasRewatch = splitListCSV(r.tags).map(t => t.toLowerCase()).includes("rewatch");
-    const isDone = statusIsCompletedXML(r.status);
-    if (hasRewatch && isDone && r.id) {
-      xmlRewatch.add(r.id);
-      xmlMap.set(r.id, r.title || `ID ${r.id}`);
+    const tags = splitListCSV(r.tags).map(t => t.toLowerCase());
+    const isRewatch = tags.includes("rewatch");
+    const isCompleted = statusIsCompletedXML(r.status);
+    if (isRewatch && isCompleted && r.id) {
+      xmlRewatchCompleted.add(String(r.id));
+      xmlTitleById.set(String(r.id), r.title || `ID ${r.id}`);
     }
   }
+
+  // LIVE set from API (independent of UI checkbox): Rewatch + Completed
+  if (!LAST_ALL_ITEMS.length) { document.getElementById("status").textContent = "Load the list first."; return; }
+  const liveMap = new Map(); // id -> { status, tagsLower[], tagsRaw[] }
+  for (const it of LAST_ALL_ITEMS) {
+    const id = String(it.node.id);
+    const status = (it.list_status?.status || "").toLowerCase();
+    const tagsRaw = (it.list_status?.tags || []);
+    const tagsLower = tagsRaw.map(t => (t || "").trim().toLowerCase()).filter(Boolean);
+    liveMap.set(id, { status, tagsLower, tagsRaw });
+  }
+
+  const liveRewatchCompleted = new Set(
+    [...liveMap.entries()]
+      .filter(([id, info]) => info.tagsLower.includes("rewatch") && info.status === "completed")
+      .map(([id]) => id)
+  );
+
+  // IDs present in XML “Rewatch+Completed” but NOT in live “Rewatch+Completed”
+  const lost = [...xmlRewatchCompleted].filter(id => !liveRewatchCompleted.has(id));
+
+  if (!lost.length) {
+    document.getElementById("diag").innerHTML =
+      "<b>No differences:</b> All XML ‘Rewatch’ (Completed) entries are present in your live MAL ‘Rewatch’ (Completed).";
+    return;
+  }
+
+  // Show live status + live tags for each “lost” entry
+  const items = lost.slice(0, 100).map(id => {
+    const title = xmlTitleById.get(id) || `ID ${id}`;
+    const live = liveMap.get(id);
+    const link = `https://myanimelist.net/anime/${id}`;
+    if (!live) {
+      return `<li><a href="${link}" target="_blank">${title}</a> — <i>not found in current API list</i></li>`;
+    }
+    const tagList = (live.tagsRaw || []).join(", ") || "—";
+    const reason = live.tagsLower.includes("rewatch")
+      ? (live.status === "completed" ? "?? (should match)" : "status ≠ Completed")
+      : "live tags do not include ‘Rewatch’";
+    return `<li><a href="${link}" target="_blank">${title}</a> — live status: <b>${live.status||"—"}</b>; live tags: <b>${tagList}</b> → <u>${reason}</u></li>`;
+  }).join("");
+
+  document.getElementById("diag").innerHTML =
+    `<b>XML said these had ‘Rewatch’ (Completed), but live API disagrees:</b> ${lost.length} item(s).
+     <ul>${items}</ul>
+     <div class="muted">Tip: After fixing a tag/status on MAL, click <b>Load List</b> again to refresh before re-running the diff.</div>`;
+});
+
 
   // Live MAL set (current filter): exact Rewatch + Completed
   if (!LAST_ROWS.length) { document.getElementById("status").textContent = "Load the list first."; return; }
@@ -412,3 +461,4 @@ document.getElementById("xmlDiff").addEventListener("click", async () => {
 </script>
 </body>
 </html>
+
