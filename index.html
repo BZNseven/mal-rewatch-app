@@ -7,24 +7,29 @@
   <style>
     body { font-family: system-ui, sans-serif; margin: 2rem; }
     button { padding: .6rem 1rem; border-radius: .5rem; border: 1px solid #ccc; cursor: pointer; margin-right:.5rem; }
+    input[type="text"] { padding:.4rem .6rem; border-radius:.4rem; border:1px solid #ccc; min-width:240px; }
     table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
     th, td { border: 1px solid #ddd; padding: .5rem; }
     th { background: #f7f7f7; text-align: left; }
     .muted { color: #777; margin-left: .5rem; }
+    .row { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; }
+    label { white-space:nowrap; }
+    #diag { margin-top:1rem; font-size:.95rem; }
+    #diag ul { margin:.4rem 0 0 1.2rem; }
   </style>
 </head>
 <body>
   <h1>Rewatch Curator (MAL)</h1>
 
-  <div id="auth">
+  <div id="auth" class="row">
     <button onclick="location.href='/auth/start'">Sign in with MAL</button>
     <button onclick="logout()">Logout</button>
     <span id="status" class="muted"></span>
   </div>
 
-  <div id="controls" style="margin-top:1rem;">
+  <div id="controls" class="row" style="margin-top:1rem;">
     <label><input type="checkbox" id="gateCompleted" checked /> Completed only</label>
-    <label style="margin-left:1rem;">Tag:
+    <label>Tag:
       <select id="tagToken">
         <option value="Rewatch" selected>Rewatch</option>
         <option value="rw-list">rw-list</option>
@@ -38,6 +43,18 @@
     <button id="missing">Explain Missing</button>
   </div>
 
+  <div class="row" style="margin-top:.5rem;">
+    <label>Find titles with tag token:
+      <input id="variantToken" type="text" placeholder="e.g., rewwatch" />
+    </label>
+    <button id="findVariant">Find</button>
+
+    <label>XML diff (upload old export): 
+      <input id="xmlFile" type="file" accept=".xml,text/xml" />
+    </label>
+    <button id="xmlDiff">Find 'Rewatch' lost vs live</button>
+  </div>
+
   <table id="tbl" style="display:none;">
     <thead>
       <tr>
@@ -46,6 +63,8 @@
     </thead>
     <tbody></tbody>
   </table>
+
+  <div id="diag" class="muted"></div>
 
 <script>
 let LAST_ROWS = [];           // filtered + sorted rows currently shown
@@ -58,23 +77,22 @@ async function logout() {
   document.getElementById("status").textContent = "Logged out.";
 }
 
-function tokenHasTag(listStatus, tagToken) {
-  if (!listStatus || !listStatus.tags) return false;
-  // MAL returns tags as an array of strings. We normalize to tokens.
-  return listStatus.tags
-    .join(",")
-    .split(",")
-    .map(s => s.trim().toLowerCase())
-    .includes(tagToken.toLowerCase());
-}
-
-function splitTags(listStatus) {
-  if (!listStatus || !listStatus.tags) return [];
-  return listStatus.tags
-    .join(",")
+function splitListCSV(value) {
+  return (value || "")
     .split(",")
     .map(s => s.trim())
     .filter(Boolean);
+}
+
+function listStatusTokens(ls) {
+  if (!ls || !ls.tags) return [];
+  return splitListCSV(ls.tags.join(","));
+}
+
+function tokenHasTag(ls, tagToken) {
+  const t = (tagToken || "").trim().toLowerCase();
+  if (!t) return false;
+  return listStatusTokens(ls).map(x => x.toLowerCase()).includes(t);
 }
 
 function statusName(s) {
@@ -187,6 +205,7 @@ function generateMarkdown(rows, detailsMap) {
 document.getElementById("load").addEventListener("click", async () => {
   try {
     document.getElementById("status").textContent = "Loading…";
+    document.getElementById("diag").textContent = "";
     LAST_ROWS = [];
     LAST_DETAILS = new Map();
 
@@ -194,7 +213,7 @@ document.getElementById("load").addEventListener("click", async () => {
     const tagToken = document.getElementById("tagToken").value;
 
     const items = await fetchAllList();
-    LAST_ALL_ITEMS = items.slice(); // keep raw set for diagnostics ✅
+    LAST_ALL_ITEMS = items.slice(); // keep raw set for diagnostics
 
     // Filter to exact tag + (optional) completed
     const filt = items.filter(x => {
@@ -261,19 +280,17 @@ document.getElementById("copyMd").addEventListener("click", async () => {
   }
 });
 
-// ——— diagnostics ———
+// Diagnostics: counts
 document.getElementById("debug").addEventListener("click", () => {
   if (!LAST_ALL_ITEMS.length) {
     document.getElementById("status").textContent = "Load the list first.";
     return;
   }
   const tagToken = document.getElementById("tagToken").value.toLowerCase();
-
-  // count all tag tokens seen (across entire list)
-  const tagCounts = new Map();   // token -> count
-  const statusCounts = new Map(); // for items that match the selected tag
+  const tagCounts = new Map();
+  const statusCounts = new Map();
   for (const it of LAST_ALL_ITEMS) {
-    const tags = splitTags(it.list_status).map(t => t.toLowerCase());
+    const tags = listStatusTokens(it.list_status).map(t => t.toLowerCase());
     for (const t of tags) tagCounts.set(t, (tagCounts.get(t)||0) + 1);
     if (tags.includes(tagToken)) {
       const st = statusName(it.list_status && it.list_status.status);
@@ -282,11 +299,11 @@ document.getElementById("debug").addEventListener("click", () => {
   }
   const tagLines = [...tagCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([t,c])=>`${t||"(empty)"}: ${c}`).join(" • ");
   const stLines  = [...statusCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([s,c])=>`${s}: ${c}`).join(" • ");
-
   document.getElementById("status").textContent =
     `Tag variants seen → ${tagLines || "none"}  ||  By status for “${tagToken}” → ${stLines || "none"}`;
 });
 
+// Diagnostics: explain missing
 document.getElementById("missing").addEventListener("click", () => {
   if (!LAST_ALL_ITEMS.length) {
     document.getElementById("status").textContent = "Load the list first.";
@@ -298,16 +315,99 @@ document.getElementById("missing").addEventListener("click", () => {
   const reasons = { notCompleted: [], tagMismatch: [] };
   for (const it of LAST_ALL_ITEMS) {
     const ls = it.list_status || {};
-    const tags = splitTags(ls).map(t => t.toLowerCase());
+    const tags = listStatusTokens(ls).map(t => t.toLowerCase());
     const hasTag = tags.includes(tagToken);
     const done = ls.status && ls.status.toLowerCase() === "completed";
     if (!hasTag) reasons.tagMismatch.push(it.node.title_english || it.node.title || `ID ${it.node.id}`);
     else if (gateCompleted && !done) reasons.notCompleted.push(it.node.title_english || it.node.title || `ID ${it.node.id}`);
   }
-
   const top5 = (arr) => arr.slice(0,5).join(" | ") + (arr.length > 5 ? ` …(+${arr.length-5})` : "");
   document.getElementById("status").textContent =
     `Excluded — Tag mismatch: ${reasons.tagMismatch.length} (e.g., ${top5(reasons.tagMismatch)}) | Not completed: ${reasons.notCompleted.length} (e.g., ${top5(reasons.notCompleted)})`;
+});
+
+// NEW: list titles that contain an exact tag token (e.g., "rewwatch")
+document.getElementById("findVariant").addEventListener("click", () => {
+  const token = (document.getElementById("variantToken").value || "").trim().toLowerCase();
+  if (!token) { document.getElementById("diag").textContent = "Enter a tag token (e.g., rewwatch)."; return; }
+  if (!LAST_ALL_ITEMS.length) { document.getElementById("status").textContent = "Load the list first."; return; }
+  const matches = LAST_ALL_ITEMS.filter(it =>
+    listStatusTokens(it.list_status).map(t => t.toLowerCase()).includes(token)
+  );
+  const ul = matches.map(it => {
+    const title = it.node.title_english || it.node.title || `ID ${it.node.id}`;
+    const link = `https://myanimelist.net/anime/${it.node.id}`;
+    return `<li><a href="${link}" target="_blank">${title}</a></li>`;
+  }).join("");
+  document.getElementById("diag").innerHTML =
+    matches.length ? `<b>Titles tagged “${token}” (${matches.length}):</b><ul>${ul}</ul>` :
+                     `No titles found with tag “${token}”.`;
+});
+
+// NEW: XML diff — find entries that had Rewatch in the XML but not in live MAL now
+function parseMalXML(text) {
+  const out = [];
+  try {
+    const doc = new DOMParser().parseFromString(text, "application/xml");
+    const nodes = doc.getElementsByTagName("anime");
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const id = (n.getElementsByTagName("series_animedb_id")[0]?.textContent || "").trim();
+      const title = (n.getElementsByTagName("series_title")[0]?.textContent || "").trim();
+      const status = (n.getElementsByTagName("my_status")[0]?.textContent || "").trim();
+      const tags = (n.getElementsByTagName("my_tags")[0]?.textContent || "").trim();
+      out.push({ id, title, status, tags });
+    }
+  } catch (e) {}
+  return out;
+}
+
+function statusIsCompletedXML(s) {
+  const v = (s || "").trim().toLowerCase();
+  return v === "completed" || v === "2"; // MAL XML sometimes uses words; sometimes codes
+}
+
+document.getElementById("xmlDiff").addEventListener("click", async () => {
+  const file = document.getElementById("xmlFile").files[0];
+  if (!file) { document.getElementById("diag").textContent = "Choose your MAL XML export file first."; return; }
+  const text = await file.text();
+  const rows = parseMalXML(text);
+  if (!rows.length) { document.getElementById("diag").textContent = "Could not parse XML."; return; }
+
+  // XML set: exact 'Rewatch' tag + Completed (robust split)
+  const xmlRewatch = new Set();
+  const xmlMap = new Map();
+  for (const r of rows) {
+    const hasRewatch = splitListCSV(r.tags).map(t => t.toLowerCase()).includes("rewatch");
+    const isDone = statusIsCompletedXML(r.status);
+    if (hasRewatch && isDone && r.id) {
+      xmlRewatch.add(r.id);
+      xmlMap.set(r.id, r.title || `ID ${r.id}`);
+    }
+  }
+
+  // Live MAL set (current filter): exact Rewatch + Completed
+  if (!LAST_ROWS.length) { document.getElementById("status").textContent = "Load the list first."; return; }
+  const liveSet = new Set(LAST_ROWS.map(r => String(r.node.id)));
+
+  // lost = in XML Rewatch but not in current live Rewatch
+  const lost = [...xmlRewatch].filter(id => !liveSet.has(String(id)));
+
+  if (!lost.length) {
+    document.getElementById("diag").innerHTML = "<b>No differences:</b> All XML ‘Rewatch’ (Completed) entries are present in your live MAL ‘Rewatch’.";
+    return;
+  }
+
+  const items = lost.slice(0, 50).map(id => {
+    const t = xmlMap.get(id) || `ID ${id}`;
+    const link = `https://myanimelist.net/anime/${id}`;
+    return `<li><a href="${link}" target="_blank">${t}</a></li>`;
+  }).join("");
+
+  document.getElementById("diag").innerHTML =
+    `<b>Likely lost ‘Rewatch’ tag since your XML export:</b> ${lost.length} item(s).
+     <ul>${items}</ul>
+     ${lost.length > 50 ? "<i>(showing first 50)</i>" : ""}`;
 });
 </script>
 </body>
