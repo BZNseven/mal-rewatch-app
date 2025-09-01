@@ -1,6 +1,5 @@
-// netlify/functions/auth-callback.js
 // Exchanges the OAuth "code" for tokens (MAL) using PKCE.
-// Uses multiValueHeaders for multiple Set-Cookie values (Netlify/AWS requirement).
+// Adds client_secret if present. Uses multiValueHeaders for cookies.
 
 const fetch = (...args) => import("node-fetch").then(({ default: f }) => f(...args));
 
@@ -31,7 +30,7 @@ exports.handler = async (event) => {
     const state = params.get("state");
     if (!code || !state) return { statusCode: 400, body: "Missing code/state" };
 
-    // Validate state + get PKCE verifier from our cookies
+    // Validate state + get PKCE verifier
     const cookies = parseCookies(event.headers.cookie || "");
     if (cookies.oauth_state !== state) {
       return { statusCode: 400, body: "State mismatch" };
@@ -47,7 +46,7 @@ exports.handler = async (event) => {
       redirect_uri: redirectUri,
       code_verifier: verifier, // PKCE "plain"
     });
-    if (clientSecret) body.set("client_secret", clientSecret); // some MAL configs require it
+    if (clientSecret) body.set("client_secret", clientSecret);
 
     // Exchange code -> tokens
     const resp = await fetch("https://myanimelist.net/v1/oauth2/token", {
@@ -55,7 +54,6 @@ exports.handler = async (event) => {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
     });
-
     if (!resp.ok) {
       const txt = await resp.text();
       return { statusCode: resp.status, body: `Token error: ${txt}` };
@@ -63,22 +61,16 @@ exports.handler = async (event) => {
 
     const json = await resp.json();
 
-    // Prepare cookies
+    // Set cookies
     const cookieList = [];
-    const maxAge = Math.max(60, (json.expires_in || 3600) - 60); // pad slightly
-    cookieList.push(
-      `mal_access=${json.access_token}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax; Path=/`
-    );
+    const maxAge = Math.max(60, (json.expires_in || 3600) - 60);
+    cookieList.push(`mal_access=${json.access_token}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax; Path=/`);
     if (json.refresh_token) {
-      cookieList.push(
-        `mal_refresh=${json.refresh_token}; Max-Age=${60 * 60 * 24 * 30}; HttpOnly; Secure; SameSite=Lax; Path=/`
-      );
+      cookieList.push(`mal_refresh=${json.refresh_token}; Max-Age=${60 * 60 * 24 * 30}; HttpOnly; Secure; SameSite=Lax; Path=/`);
     }
-    // Clear one-time cookies
     cookieList.push(`pkce_verifier=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`);
     cookieList.push(`oauth_state=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`);
 
-    // Redirect home
     return {
       statusCode: 302,
       headers: { Location: "/" },
