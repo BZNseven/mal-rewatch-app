@@ -1,3 +1,4 @@
+// netlify/functions/mal-proxy.js
 const fetch = (...args) => import("node-fetch").then(({default: f}) => f(...args));
 
 function parseCookies(cookieHeader = "") {
@@ -17,6 +18,7 @@ exports.handler = async (event) => {
     const qStr = qs ? `?${qs}` : "";
 
     if (path.startsWith("/animelist")) {
+      // Requires user access token
       const access = parseCookies(event.headers.cookie || "").mal_access;
       if (!access) return { statusCode: 401, body: "Not signed in." };
 
@@ -28,6 +30,7 @@ exports.handler = async (event) => {
     }
 
     if (path.startsWith("/anime/")) {
+      // Public details (no user token), but needs Client ID
       const clientId = process.env.MAL_CLIENT_ID;
       if (!clientId) return { statusCode: 500, body: "Missing MAL_CLIENT_ID" };
 
@@ -42,12 +45,13 @@ exports.handler = async (event) => {
     if (path.startsWith("/logout")) {
       return {
         statusCode: 200,
-        headers: {
+        multiValueHeaders: {
           "Set-Cookie": [
             `mal_access=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`,
             `mal_refresh=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`,
           ],
         },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ok: true }),
       };
     }
