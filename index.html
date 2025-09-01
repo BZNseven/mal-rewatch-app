@@ -344,7 +344,7 @@ document.getElementById("findVariant").addEventListener("click", () => {
                      `No titles found with tag “${token}”.`;
 });
 
-// NEW: XML diff — find entries that had Rewatch in the XML but not in live MAL now
+// NEW: XML diff — compare XML (Rewatch+Completed) vs LIVE API (Rewatch+Completed) with reasons
 function parseMalXML(text) {
   const out = [];
   try {
@@ -364,7 +364,7 @@ function parseMalXML(text) {
 
 function statusIsCompletedXML(s) {
   const v = (s || "").trim().toLowerCase();
-  return v === "completed" || v === "2"; // MAL XML sometimes uses words; sometimes codes
+  return v === "completed" || v === "2";
 }
 
 document.getElementById("xmlDiff").addEventListener("click", async () => {
@@ -433,32 +433,6 @@ document.getElementById("xmlDiff").addEventListener("click", async () => {
      <ul>${items}</ul>
      <div class="muted">Tip: After fixing a tag/status on MAL, click <b>Load List</b> again to refresh before re-running the diff.</div>`;
 });
-
-
-  // Live MAL set (current filter): exact Rewatch + Completed
-  if (!LAST_ROWS.length) { document.getElementById("status").textContent = "Load the list first."; return; }
-  const liveSet = new Set(LAST_ROWS.map(r => String(r.node.id)));
-
-  // lost = in XML Rewatch but not in current live Rewatch
-  const lost = [...xmlRewatch].filter(id => !liveSet.has(String(id)));
-
-  if (!lost.length) {
-    document.getElementById("diag").innerHTML = "<b>No differences:</b> All XML ‘Rewatch’ (Completed) entries are present in your live MAL ‘Rewatch’.";
-    return;
-  }
-
-  const items = lost.slice(0, 50).map(id => {
-    const t = xmlMap.get(id) || `ID ${id}`;
-    const link = `https://myanimelist.net/anime/${id}`;
-    return `<li><a href="${link}" target="_blank">${t}</a></li>`;
-  }).join("");
-
-  document.getElementById("diag").innerHTML =
-    `<b>Likely lost ‘Rewatch’ tag since your XML export:</b> ${lost.length} item(s).
-     <ul>${items}</ul>
-     ${lost.length > 50 ? "<i>(showing first 50)</i>" : ""}`;
-});
 </script>
 </body>
 </html>
-
