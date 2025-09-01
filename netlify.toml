@@ -1,0 +1,17 @@
+[functions]
+directory = "netlify/functions"
+
+[[redirects]]
+from = "/auth/start"
+to = "/.netlify/functions/auth-start"
+status = 200
+
+[[redirects]]
+from = "/.netlify/functions/auth-callback"
+to = "/.netlify/functions/auth-callback"
+status = 200
+
+[[redirects]]
+from = "/api/*"
+to = "/.netlify/functions/mal-proxy"
+status = 200

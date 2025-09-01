@@ -1,0 +1,147 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>BZN7 Rewatch Curator</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; }
+    button { padding: .6rem 1rem; border-radius: .5rem; border: 1px solid #ccc; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #ddd; padding: .5rem; }
+    th { background: #f7f7f7; text-align: left; }
+    .muted { color: #777; }
+  </style>
+</head>
+<body>
+  <h1>Rewatch Curator (MAL)</h1>
+
+  <div id="auth">
+    <button onclick="location.href='/auth/start'">Sign in with MAL</button>
+    <button onclick="logout()">Logout</button>
+    <span id="status" class="muted"></span>
+  </div>
+
+  <div id="controls" style="margin-top:1rem;">
+    <label><input type="checkbox" id="gateCompleted" checked /> Completed only</label>
+    <label style="margin-left:1rem;">Tag:
+      <select id="tagToken">
+        <option value="Rewatch" selected>Rewatch</option>
+        <option value="rw-list">rw-list</option>
+      </select>
+    </label>
+    <button id="load">Load List</button>
+  </div>
+
+  <table id="tbl" style="display:none;">
+    <thead>
+      <tr>
+        <th>Title</th><th>My Score</th><th>Genres</th><th>Year</th><th>Type</th><th>Ep</th><th>Studios</th><th>Link</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+<script>
+async function logout() {
+  await fetch("/api/logout");
+  document.getElementById("status").textContent = "Logged out.";
+}
+
+function tokenHasTag(listStatus, tagToken) {
+  if (!listStatus || !listStatus.tags) return false;
+  return listStatus.tags
+    .join(",")
+    .split(",")
+    .map(s => s.trim().toLowerCase())
+    .includes(tagToken.toLowerCase());
+}
+
+async function fetchAllList() {
+  const rows = [];
+  let offset = 0;
+  const limit = 100;
+  const fields = "list_status{tags,score,status,is_rewatching,num_times_rewatched,rewatch_value}";
+  while (true) {
+    const url = `/api/animelist?limit=${limit}&offset=${offset}&fields=${encodeURIComponent(fields)}`;
+    const r = await fetch(url);
+    if (r.status === 401) throw new Error("Not signed in.");
+    if (!r.ok) throw new Error("Animelist error: " + (await r.text()));
+    const j = await r.json();
+    (j.data || []).forEach(item => rows.push(item));
+    if (!j.paging || !j.paging.next) break;
+    offset += limit;
+  }
+  return rows;
+}
+
+async function enrichOne(id) {
+  const u = `/api/anime/${id}?fields=genres,studios,start_season,num_episodes,media_type`;
+  const r = await fetch(u);
+  if (!r.ok) return null;
+  return r.json();
+}
+
+document.getElementById("load").addEventListener("click", async () => {
+  try {
+    document.getElementById("status").textContent = "Loading…";
+    const gateCompleted = document.getElementById("gateCompleted").checked;
+    const tagToken = document.getElementById("tagToken").value;
+
+    const items = await fetchAllList();
+
+    // Filter to exact tag + (optional) completed
+    const filt = items.filter(x => {
+      const ls = x.list_status || {};
+      const hasTag = tokenHasTag(ls, tagToken);
+      const done = !gateCompleted || (ls.status && ls.status.toLowerCase() === "completed");
+      return hasTag && done;
+    });
+
+    // Top by score (show 20 as demo)
+    const top = filt.slice().sort((a,b) => (b.list_status.score||0) - (a.list_status.score||0)).slice(0, 20);
+
+    // Enrich
+    const enriched = await Promise.all(top.map(async (x) => {
+      const id = x.node.id;
+      const d = await enrichOne(id);
+      return { raw: x, details: d };
+    }));
+
+    // Render
+    const tbody = document.querySelector("#tbl tbody");
+    tbody.innerHTML = "";
+    for (const row of enriched) {
+      const n = row.raw.node;
+      const ls = row.raw.list_status || {};
+      const d = row.details || {};
+      const title = n.title_english || n.title || "—";
+      const score = (ls.score && ls.score !== 0) ? ls.score : "—";
+      const genres = (d.genres || []).slice(0,3).map(g => g.name).join(", ");
+      const studios = (d.studios || []).slice(0,2).map(s => s.name).join(", ");
+      const year = (d.start_season && d.start_season.year) ? d.start_season.year : "";
+      const type = d.media_type || n.media_type || "";
+      const ep = (typeof d.num_episodes === "number") ? d.num_episodes : (n.num_episodes || "");
+      const link = `https://myanimelist.net/anime/${n.id}`;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${title}</td>
+        <td style="text-align:right">${score}</td>
+        <td>${genres}</td>
+        <td style="text-align:right">${year||""}</td>
+        <td>${type||""}</td>
+        <td style="text-align:right">${ep||""}</td>
+        <td>${studios}</td>
+        <td><a href="${link}" target="_blank">MAL</a></td>`;
+      tbody.appendChild(tr);
+    }
+    document.getElementById("tbl").style.display = "";
+    document.getElementById("status").textContent = `Loaded ${filt.length} items; showing ${enriched.length}.`;
+  } catch (e) {
+    document.getElementById("status").textContent = e.message || "Error.";
+  }
+});
+</script>
+</body>
+</html>
