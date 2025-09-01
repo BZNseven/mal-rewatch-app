@@ -1,4 +1,3 @@
-// netlify/functions/mal-proxy.js
 // Normalizes /api/* → /* so our route checks work.
 // Uses multiValueHeaders for multiple Set-Cookie values.
 
@@ -16,9 +15,8 @@ function parseCookies(cookieHeader = "") {
 
 exports.handler = async (event) => {
   try {
-    // Example event.path: "/.netlify/functions/mal-proxy/api/animelist"
+    // Example path: "/.netlify/functions/mal-proxy/api/animelist"
     let path = (event.path || "").replace("/.netlify/functions/mal-proxy", "");
-    // Remove the /api prefix added by our redirect rule
     if (path.startsWith("/api")) path = path.slice(4);
     if (!path.startsWith("/")) path = "/" + path;
 
@@ -26,7 +24,7 @@ exports.handler = async (event) => {
     const qStr = qs ? `?${qs}` : "";
 
     if (path.startsWith("/animelist")) {
-      // Requires user access token (set by auth-callback)
+      // Requires user access token
       const access = parseCookies(event.headers.cookie || "").mal_access;
       if (!access) return { statusCode: 401, body: "Not signed in." };
 
