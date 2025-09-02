@@ -377,7 +377,7 @@ async function handleLoad(){
     allList = items;
 
     // D) show authed controls now that a call succeeded
-    $$('.authed-only').forEach(function(el){ el.style.display = ''; });
+    $$('.authed-only').forEach(function(el){ el.style.display = 'inline-block'; });
 
     // filter
     var tag = ($('#tagInput').value||'Rewatch').trim();
@@ -632,3 +632,4 @@ $('#genRecsBtn').onclick = generateRecs;
 </script>
 </body>
 </html>
+
