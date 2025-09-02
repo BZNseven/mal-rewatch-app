@@ -1,478 +1,606 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>BZN7 Rewatch Curator</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MAL Rewatch Curator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root{
-      --bar-bg:#e5e7eb; --bar-fg:#10b981; --bar-fg2:#3b82f6; --ink:#111827; --muted:#6b7280; --card:#f9fafb; --line:#e5e7eb;
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --text: #e6e6ea;
+      --muted: #a0a4ac;
+      --accent: #4aa3ff;
+      --accent-2: #8b5cf6;
+      --good: #3ecf8e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --chip: #222735;
+      --highlight: rgba(74,163,255,0.12);
+      --border: #262a35;
     }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; color: var(--ink); }
-    header { position: sticky; top:0; z-index: 10; background: #fff; border-bottom: 1px solid var(--line); }
-    #progWrap { height:8px; background: var(--bar-bg); overflow:hidden; }
-    #progBar  { height:100%; width:0%; background: linear-gradient(90deg, var(--bar-fg), var(--bar-fg2)); transition: width .2s ease; }
-    #top { display:flex; align-items:center; gap:.75rem; padding: 12px 16px; flex-wrap: wrap; }
-    #status { color: var(--muted); font-size:.9rem; }
-    main { padding: 20px 16px 32px; max-width: 1200px; margin: 0 auto; }
-    button { padding: .6rem 1rem; border-radius: .55rem; border: 1px solid #d1d5db; background:#fff; cursor: pointer; margin-right:.5rem; }
-    button:hover { background:#f3f4f6; }
-    input[type="text"], input[type="number"] { padding:.45rem .6rem; border-radius:.45rem; border:1px solid #d1d5db; }
-    input[type="number"] { width: 5.5rem; }
-    .row { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; }
-    label { white-space:nowrap; }
-    .panel { background: var(--card); border:1px solid var(--line); border-radius: .75rem; padding: 12px 14px; margin: 12px 0; }
-    .panel h3 { margin: 0 0 8px 0; font-size: 1rem; }
-    .kv { display:grid; grid-template-columns: 140px 1fr auto; gap: .4rem .8rem; align-items:center; }
-    .bar { height:8px; background: var(--bar-bg); border-radius: 999px; overflow:hidden; }
-    .bar > span { display:block; height:100%; background: var(--bar-fg2); }
-    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
-    th, td { border: 1px solid #e5e7eb; padding: .5rem; }
-    th { background: #f7f7f7; text-align: left; }
+    html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1200px; margin: 24px auto 80px; padding: 0 16px; }
+    header { display:flex; align-items:center; gap:12px; justify-content: space-between; margin-bottom: 12px; }
+    .btn { background: var(--panel); border:1px solid var(--border); color:var(--text); padding:8px 12px; border-radius:8px; cursor:pointer; }
+    .btn:disabled { opacity: .6; cursor:not-allowed; }
+    .btn.primary { background: linear-gradient(180deg, #2b6cdf, #1f5bd1); border-color: #1b4fb6; }
+    .btn.ghost { background: transparent; border-color: var(--border); }
+    .btn.warn { background: #2a1c0b; border-color:#3b2b11; color:#fbbf24; }
+    .controls { display:flex; flex-wrap: wrap; gap:8px; align-items:center; }
+    .field { display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--border); padding:6px 10px; border-radius:8px; }
+    .field input[type="text"], .field input[type="number"], .field select { background: transparent; border:none; outline:none; color:var(--text); }
     .muted { color: var(--muted); }
-    #diag ul { margin:.4rem 0 0 1.2rem; }
-    .controls { gap: .6rem 1rem; }
-    .chip { display:inline-block; padding:.1rem .5rem; border:1px solid var(--line); border-radius:999px; background:#fff; margin-right:.25rem; font-size:.85rem; }
+    .chips { display:flex; gap:6px; flex-wrap: wrap; }
+    .chip { background: var(--chip); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); }
+    hr.sep { border:none; border-top:1px solid var(--border); margin:16px 0; }
+    /* Progress */
+    .progress { background:#141822; border:1px solid var(--border); border-radius:10px; overflow:hidden; height:14px; position:relative; }
+    .bar { background: linear-gradient(90deg, var(--accent), var(--good)); width:0%; height:100%; transition: width .2s; }
+    .progress-row { display:grid; grid-template-columns: 1fr auto; gap:12px; align-items:center; }
+    /* Table */
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding:10px 8px; border-bottom:1px solid var(--border); vertical-align: top; }
+    thead th { text-align:left; font-weight:600; color:#cfd3dc; position: sticky; top: 0; background: var(--bg); }
+    tbody tr:hover { background: #141821; }
+    tr.highlight { background: var(--highlight); }
+    /* Snapshot + recs */
+    .grid { display:grid; gap:12px; }
+    @media(min-width:900px){ .grid.cols-2 { grid-template-columns: 1fr 1fr; } }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px; }
+    .card h3 { margin:0 0 8px; font-size:16px; }
+    .stack { display:flex; flex-direction:column; gap:8px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .note { font-size:12px; color:var(--muted); }
+    .recs { display:grid; gap:8px; }
+    .rec { background:#121723; border:1px solid var(--border); border-radius:10px; padding:10px; }
+    .rec h4 { margin:0 0 4px; font-size:15px; }
+    .pill { font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#1a1f2b; color:#bfc5d3; }
+    .right { text-align:right; }
+    .small { font-size: 12px; }
+    /* Hide when not logged */
+    .authed-only { display:none; }
   </style>
 </head>
 <body>
-  <header>
-    <div id="progWrap"><div id="progBar"></div></div>
-    <div id="top">
-      <button onclick="location.href='/auth/start'">Sign in with MAL</button>
-      <button onclick="logout()">Logout</button>
-      <span id="status" class="muted"></span>
-    </div>
-  </header>
-
-  <main>
-    <div class="panel">
-      <div class="row controls">
-        <label><input type="checkbox" id="gateCompleted" checked /> Completed only</label>
-        <label>Tag:
-          <select id="tagToken">
-            <option value="Rewatch" selected>Rewatch</option>
-            <option value="rw-list">rw-list</option>
-          </select>
-        </label>
-        <button id="load">Load List</button>
-        <button id="exportCsv">Download CSV</button>
-        <button id="exportMd">Download Markdown</button>
-        <button id="copyMd">Copy Markdown</button>
-        <button id="debug">Debug Counts</button>
-        <button id="missing">Explain Missing</button>
-        <label>Find tag token: <input id="variantToken" type="text" placeholder="e.g., rewwatch" /></label>
-        <button id="findVariant">Find</button>
-        <label>XML export: <input id="xmlFile" type="file" accept=".xml,text/xml" /></label>
-        <button id="xmlDiff">XML diff</button>
-        <button id="clearCache" title="Forget cached details">Clear details cache</button>
+  <div class="wrap">
+    <header>
+      <div class="controls">
+        <button id="loginBtn" class="btn">Sign in with MAL</button>
+        <button id="logoutBtn" class="btn ghost">Logout</button>
       </div>
-    </div>
-
-    <div class="panel" id="profilePanel" style="display:none;">
-      <h3>Profile Snapshot</h3>
-      <div class="row" style="gap:1rem;">
-        <div class="chip">Favorites set from your Rewatch list, weighted by your scores.</div>
+      <div class="controls">
+        <div class="field"><label><input type="checkbox" id="completedOnly"> Completed only</label></div>
+        <div class="field"><span class="muted">Tag:</span><input id="tagInput" type="text" value="Rewatch" size="10" /></div>
+        <button id="loadBtn" class="btn primary">Load List</button>
+        <button id="csvBtn" class="btn authed-only">Download CSV</button>
+        <button id="mdBtn" class="btn authed-only">Download Markdown</button>
+        <button id="copyMdBtn" class="btn authed-only">Copy Markdown</button>
+        <button id="clearCacheBtn" class="btn warn authed-only" title="Clear cached detail lookups">Clear details cache</button>
       </div>
-      <div class="row" style="gap:2rem; margin-top:.5rem; flex-wrap:wrap;">
-        <div style="min-width:300px; flex:1;">
-          <div class="row" style="justify-content:space-between; align-items:center;">
-            <strong>Top Genres</strong>
-            <label class="muted">Bias
-              <input type="checkbox" id="genreBiasOn" checked />
-              weight <input type="number" id="genreBiasW" min="0" max="2" step="0.05" value="1.15" />
-            </label>
-          </div>
-          <div id="profileGenres" class="kv"></div>
+    </header>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>Progress</h3>
+        <div class="progress-row">
+          <div class="progress"><div id="bar" class="bar"></div></div>
+          <div id="progressText" class="muted small right">0%</div>
         </div>
-        <div style="min-width:300px; flex:1;">
-          <div class="row" style="justify-content:space-between; align-items:center;">
-            <strong>Top Studios</strong>
-            <label class="muted">Bias
-              <input type="checkbox" id="studioBiasOn" checked />
-              weight <input type="number" id="studioBiasW" min="0" max="2" step="0.05" value="1.25" />
-            </label>
-          </div>
-          <div id="profileStudios" class="kv"></div>
-        </div>
+        <div class="row small muted" id="countsRow" style="margin-top:8px;">Waiting…</div>
       </div>
-      <div class="muted" style="margin-top:.5rem;">Settings are saved in your browser and will be used when we add on-page recommendations.</div>
+
+      <div class="card">
+        <h3>Quick Filters</h3>
+        <div class="row">
+          <div class="field" title="Filter titles live"><span>Search</span><input id="searchBox" type="text" placeholder="Type to filter titles…" size="24"></div>
+          <div class="field" title="Hide rows below a score"><span>Min Score</span>
+            <select id="minScore">
+              <option value="">—</option>
+              <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+            </select>
+          </div>
+        </div>
+        <div class="note small">Search and min score are client-side filters and won’t re-fetch data.</div>
+      </div>
     </div>
 
-    <table id="tbl" style="display:none;">
-      <thead>
-        <tr>
-          <th>Title</th><th>My Score</th><th>Genres</th><th>Year</th><th>Type</th><th>Ep</th><th>Studios</th><th>Link</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <hr class="sep" />
 
-    <div id="diag" class="muted"></div>
-  </main>
+    <section class="grid cols-2">
+      <div class="card">
+        <h3>Profile Snapshot</h3>
+        <div class="note small">Favorites set from your Rewatch list, weighted by your scores.</div>
+        <div class="stack" style="margin-top:8px;">
+          <div>
+            <div class="row">
+              <strong>Top Genres</strong>
+              <label class="field"><input type="checkbox" id="genreBiasOn"> Bias</label>
+              <div class="field"><span>weight</span><input type="number" id="genreBiasW" min="0" step="0.1" max="3" value="0.8"></div>
+            </div>
+            <div id="topGenres" class="chips"></div>
+          </div>
+          <div>
+            <div class="row">
+              <strong>Top Studios</strong>
+              <label class="field"><input type="checkbox" id="studioBiasOn"> Bias</label>
+              <div class="field"><span>weight</span><input type="number" id="studioBiasW" min="0" step="0.1" max="3" value="0.8"></div>
+            </div>
+            <div id="topStudios" class="chips"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Recommendations</h3>
+        <div class="row">
+          <button id="genRecsBtn" class="btn primary authed-only">Generate recommendations</button>
+          <span class="note small">12 picks not already on any of your MAL statuses.</span>
+        </div>
+        <div id="recs" class="recs" style="margin-top:10px;"></div>
+      </div>
+    </section>
+
+    <hr class="sep" />
+
+    <section class="card">
+      <h3>Rewatch List</h3>
+      <div class="note small">Matching tag exactly <strong>Rewatch</strong> after splitting comma tags. English title preferred when available. Score 0 is shown as “—”.</div>
+      <div style="overflow:auto; margin-top:8px;">
+        <table id="table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>My Score</th>
+              <th>Genres</th>
+              <th>Year</th>
+              <th>Type</th>
+              <th>Ep</th>
+              <th>Studios</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="note small" style="margin-top:12px;">
+      Settings save locally and persist for 90 days. NSFW visibility is on via the proxy.
+    </p>
+  </div>
 
 <script>
-let LAST_ROWS = [];           // filtered + sorted rows currently shown
-let LAST_DETAILS = new Map(); // id -> details (genres/studios/etc)
-let LAST_ALL_ITEMS = [];      // raw items from MAL (unfiltered)
+/* ---------- Util ---------- */
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const MAL_LINK = id => `https://myanimelist.net/anime/${id}`;
 
-// ——— enrichment + cache config ———
-const DETAILS_FIELDS = "genres,studios,start_season,num_episodes,media_type";
-const RATE_DELAY_MS = 600;
-const MAX_RETRIES = 3;
-const CACHE_KEY = "mal_details_cache_v1";
-const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 90; // 90 days
-let CACHE = loadCache();
-
-// ——— bias settings (persisted) ———
-const BIAS_KEY = "bias_settings_v1";
-let BIAS = loadBias();
-
-function loadBias() {
-  try {
-    const x = JSON.parse(localStorage.getItem(BIAS_KEY) || "{}");
-    return {
-      genreOn: x.genreOn ?? true,
-      genreW:  typeof x.genreW === "number" ? x.genreW : 1.15,
-      studioOn: x.studioOn ?? true,
-      studioW:  typeof x.studioW === "number" ? x.studioW : 1.25,
-    };
-  } catch { return { genreOn:true, genreW:1.15, studioOn:true, studioW:1.25 }; }
-}
-function saveBias() {
-  try { localStorage.setItem(BIAS_KEY, JSON.stringify(BIAS)); } catch {}
-  // show current in status for quick sanity
-  console.log("Bias saved:", BIAS);
+function getCookie(name){
+  const m = document.cookie.match(new RegExp('(^| )'+name+'=([^;]+)'));
+  return m ? decodeURIComponent(m[2]) : null;
 }
 
-// ——— progress bar ———
-function setProgress(done, total) {
-  const pct = total ? Math.round((done / total) * 100) : 0;
-  document.getElementById("progBar").style.width = pct + "%";
+function saveLS(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+function loadLS(key, def=null){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch(e){ return def; } }
+
+function setProgress(done, total, label){
+  const pct = total ? Math.floor(done/total*100) : 0;
+  $('#bar').style.width = pct + '%';
+  $('#progressText').textContent = `${pct}%`;
+  if(label){ $('#countsRow').textContent = label; }
 }
 
-// ——— cache helpers ———
-function loadCache() { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "{}"); } catch { return {}; } }
-function saveCacheSoon() { clearTimeout(saveCacheSoon._t); saveCacheSoon._t = setTimeout(() => { try { localStorage.setItem(CACHE_KEY, JSON.stringify(CACHE)); } catch {} }, 250); }
-function getCachedDetails(id) { const e = CACHE[id]; if (!e) return null; if ((Date.now()-e.ts) > CACHE_TTL_MS) { delete CACHE[id]; saveCacheSoon(); return null; } return e.data || null; }
-function setCachedDetails(id,data){ CACHE[id]={ts:Date.now(),data}; saveCacheSoon(); }
-
-// ——— utils ———
-async function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
-async function logout(){ await fetch("/api/logout"); document.getElementById("status").textContent = "Logged out."; }
-
-function splitListCSV(value){ return (value||"").split(",").map(s=>s.trim()).filter(Boolean); }
-function listStatusTokens(ls){ if(!ls||!ls.tags) return []; return splitListCSV(ls.tags.join(",")); }
-function tokenHasTag(ls,tag){ const t=(tag||"").trim().toLowerCase(); if(!t) return false; return listStatusTokens(ls).map(x=>x.toLowerCase()).includes(t); }
-function statusName(s){ return (s||"").toLowerCase()||"unknown"; }
-
-// ——— API ———
-async function fetchAllList(){
-  const rows=[]; let offset=0; const limit=100;
-  const fields="list_status{tags,score,status,is_rewatching,num_times_rewatched,rewatch_value}";
-  while(true){
-    const url=`/api/animelist?limit=${limit}&offset=${offset}&fields=${encodeURIComponent(fields)}`;
-    const r=await fetch(url);
-    if(r.status===401) throw new Error("Not signed in.");
-    if(!r.ok) throw new Error("Animelist error: " + (await r.text()));
-    const j=await r.json();
-    (j.data||[]).forEach(it=>rows.push(it));
-    if(!j.paging || !j.paging.next) break;
-    offset+=limit;
+/* ---------- API Proxy helpers ---------- */
+const API = {
+  async animelist(params){
+    const qs = new URLSearchParams(params);
+    const res = await fetch(`/api/animelist?${qs.toString()}`, { credentials:'include' });
+    if(!res.ok) throw new Error(`animelist ${res.status}`);
+    return res.json();
+  },
+  async animeDetails(id, fields){
+    const qs = new URLSearchParams({ fields });
+    const res = await fetch(`/api/anime/${id}?${qs.toString()}`, { credentials:'include' });
+    if(!res.ok) throw new Error(`anime ${id} ${res.status}`);
+    return res.json();
+  },
+  async animeRanking(ranking_type, limit=100, offset=0, fields='id,title,alternative_titles,mean,genres,studios,start_season,media_type'){
+    const qs = new URLSearchParams({ ranking_type, limit, offset, fields });
+    const res = await fetch(`/api/anime-ranking?${qs.toString()}`, { credentials:'include' });
+    if(!res.ok) throw new Error(`ranking ${ranking_type} ${res.status}`);
+    return res.json();
   }
-  return rows;
+};
+
+/* ---------- State ---------- */
+let allList = [];          // full @me animelist (minimal)
+let rewatchRows = [];      // filtered + enriched rows
+let topGenres = [];        // [{name, weight}]
+let topStudios = [];       // [{name, weight}]
+let excludeIdSet = new Set();
+
+const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+function cacheGet(key){
+  const raw = loadLS('cache:'+key, null);
+  if(!raw) return null;
+  if(Date.now() - raw.t > CACHE_TTL_MS) return null;
+  return raw.v;
 }
-async function fetchDetailsWithRetry(id){
-  let attempt=0;
-  while(attempt<MAX_RETRIES){
-    attempt++;
-    const r = await fetch(`/api/anime/${id}?fields=${encodeURIComponent(DETAILS_FIELDS)}`);
-    if(r.ok) return r.json();
-    if(r.status===429 || (r.status>=500 && r.status<600)){ await sleep(RATE_DELAY_MS*attempt); continue; }
-    return null;
-  }
-  return null;
+function cacheSet(key, val){
+  saveLS('cache:'+key, { t: Date.now(), v: val });
 }
 
-// ——— render ———
-function toDisplayRow(row, details){
-  const n=row.node, ls=row.list_status||{}, d=details||{};
-  const title = n.title_english || n.title || "—";
-  const score = (ls.score && ls.score!==0) ? ls.score : "—";
-  const genresArr=(d.genres||[]).slice(0,3).map(g=>g.name);
-  const studiosArr=(d.studios||[]).slice(0,2).map(s=>s.name);
-  const year=(d.start_season&&d.start_season.year)?d.start_season.year:"";
-  const type=d.media_type || n.media_type || "";
-  const ep=(typeof d.num_episodes==="number")?d.num_episodes:(n.num_episodes||"");
-  const link=`https://myanimelist.net/anime/${n.id}`;
-  return { title, score, genresArr, year, type, ep, studiosArr, link, id:n.id };
+/* ---------- Auth UI ---------- */
+function reflectAuth(){
+  const has = !!getCookie('mal_access');
+  $$('.authed-only').forEach(el => { el.style.display = has ? '' : 'none'; });
 }
-function render(rows, detailsMap){
-  const tbody=document.querySelector("#tbl tbody");
-  tbody.innerHTML="";
-  for(const row of rows){
-    const d=detailsMap.get(row.node.id);
-    const v=toDisplayRow(row,d);
-    const tr=document.createElement("tr");
-    tr.innerHTML=`
-      <td>${v.title}</td>
-      <td style="text-align:right">${v.score}</td>
-      <td>${v.genresArr.join(", ")}</td>
-      <td style="text-align:right">${v.year||""}</td>
-      <td>${v.type||""}</td>
-      <td style="text-align:right">${v.ep||""}</td>
-      <td>${v.studiosArr.join(", ")}</td>
-      <td><a href="${v.link}" target="_blank">MAL</a></td>`;
+$('#loginBtn').onclick = () => { window.location.href = '/.netlify/functions/auth-start'; };
+$('#logoutBtn').onclick = () => { document.cookie = 'mal_access=; Max-Age=0; path=/'; document.cookie='mal_refresh=; Max-Age=0; path=/'; location.reload(); };
+reflectAuth();
+
+/* ---------- Load + Enrich ---------- */
+function parseEnglishTitle(node){
+  const en = node.alternative_titles && node.alternative_titles.en;
+  return en && en.trim().length ? en : node.title;
+}
+
+function commaTagsInclude(tagBlob, needle){
+  if(!tagBlob) return false;
+  const parts = tagBlob.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  return parts.some(p => p === needle.toLowerCase());
+}
+
+function fmtScore(s){ return s && s > 0 ? String(s) : '—'; }
+
+function renderTable(){
+  const q = ($('#searchBox').value || '').toLowerCase();
+  const min = parseInt($('#minScore').value || '0', 10);
+  const tbody = $('#tbody');
+  tbody.innerHTML = '';
+  let shown = 0;
+
+  const topGset = new Set(topGenres.map(g=>g.name));
+  const topSset = new Set(topStudios.map(s=>s.name));
+
+  for(const r of rewatchRows){
+    if(q && !r.title.toLowerCase().includes(q)) continue;
+    if(min && (r.myScore || 0) < min) continue;
+
+    const tr = document.createElement('tr');
+    const hasSig = r.genres.some(g=>topGset.has(g)) || r.studios.some(s=>topSset.has(s));
+    if(hasSig) tr.classList.add('highlight');
+
+    tr.innerHTML = `
+      <td>${r.title}</td>
+      <td>${fmtScore(r.myScore)}</td>
+      <td>${r.genres.slice(0,3).join(', ')}</td>
+      <td>${r.year || ''}</td>
+      <td>${r.type || ''}</td>
+      <td>${r.episodes || ''}</td>
+      <td>${r.studios.slice(0,2).join(', ')}</td>
+      <td><a href="${MAL_LINK(r.id)}" target="_blank" rel="noopener">MAL</a></td>
+    `;
     tbody.appendChild(tr);
+    shown++;
   }
-  document.getElementById("tbl").style.display="";
+  $('#countsRow').textContent = `Rows: ${shown}/${rewatchRows.length}. Cached details: ${loadLS('cacheStats', {hits:0,miss:0}).hits} hits, ${loadLS('cacheStats', {hits:0,miss:0}).miss} misses.`;
 }
 
-// ——— profile (weighted) ———
-function computeProfile(rows, detailsMap){
-  const g=new Map(), s=new Map();
-  let maxG=0, maxS=0;
-  for(const r of rows){
-    const w = r.list_status?.score || 0; if(!w) continue;
-    const d = detailsMap.get(r.node.id); if(!d) continue;
-    for(const gg of (d.genres||[])){ const k=gg.name; const v=(g.get(k)||0)+w; g.set(k,v); if(v>maxG) maxG=v; }
-    for(const st of (d.studios||[])){ const k=st.name; const v=(s.get(k)||0)+w; s.set(k,v); if(v>maxS) maxS=v; }
+function updateSnapshot(){
+  // weights by score; 0 omits weight
+  const gCounts = new Map();
+  const sCounts = new Map();
+  for(const r of rewatchRows){
+    const w = r.myScore && r.myScore > 0 ? r.myScore : 0;
+    if(w === 0) continue;
+    r.genres.forEach(g => gCounts.set(g, (gCounts.get(g)||0)+w));
+    r.studios.forEach(s => sCounts.set(s, (sCounts.get(s)||0)+w));
   }
-  const norm = (m,max) => [...m.entries()].map(([k,v]) => [k, max? +(v/max).toFixed(2):0]).sort((a,b)=>b[1]-a[1]);
-  return { genres: norm(g,maxG), studios: norm(s,maxS) };
-}
-function renderProfile(){
-  if(!LAST_ROWS.length || LAST_DETAILS.size===0){ document.getElementById("profilePanel").style.display="none"; return; }
-  const prof = computeProfile(LAST_ROWS, LAST_DETAILS);
-  const gTop = prof.genres.slice(0,8);
-  const sTop = prof.studios.slice(0,8);
+  const toArr = (m) => Array.from(m.entries()).map(([name, w])=>({name, weight:Math.round(w)})).sort((a,b)=>b.weight - a.weight).slice(0,12);
+  topGenres = toArr(gCounts);
+  topStudios = toArr(sCounts);
 
-  const mk = (arr) => arr.map(([name,score]) => `
-      <div class="muted">${name}</div>
-      <div class="bar"><span style="width:${Math.round(score*100)}%"></span></div>
-      <div class="muted">${score.toFixed(2)}</div>
-  `).join("");
+  const tg = $('#topGenres'); tg.innerHTML = '';
+  topGenres.forEach(g => tg.appendChild(chip(`${g.name} · ${g.weight}`)));
+  const ts = $('#topStudios'); ts.innerHTML = '';
+  topStudios.forEach(s => ts.appendChild(chip(`${s.name} · ${s.weight}`)));
 
-  document.getElementById("profileGenres").innerHTML = mk(gTop);
-  document.getElementById("profileStudios").innerHTML = mk(sTop);
-  document.getElementById("profilePanel").style.display="";
+  // persist bias UI
+  const gbOn = $('#genreBiasOn').checked, sbOn = $('#studioBiasOn').checked;
+  const gbW = parseFloat($('#genreBiasW').value||'0'), sbW = parseFloat($('#studioBiasW').value||'0');
+  saveLS('bias', { gbOn, sbOn, gbW, sbW });
 }
 
-// ——— enrichment orchestration ———
-async function enrichAll(rows){
-  // prefill from cache
-  let have=0;
-  for(const r of rows){ const id=r.node.id; const c=getCachedDetails(id); if(c){ LAST_DETAILS.set(id,c); have++; } }
-  render(rows, LAST_DETAILS);
-  setProgress(have, rows.length);
+function chip(text){
+  const c = document.createElement('span');
+  c.className='chip';
+  c.textContent = text;
+  return c;
+}
 
-  // fetch missing with throttle
-  const missing = rows.filter(r=>!LAST_DETAILS.has(r.node.id));
-  let done=0, total=missing.length;
-  for(const r of missing){
-    await sleep(RATE_DELAY_MS);
-    const det = await fetchDetailsWithRetry(r.node.id);
-    if(det){ LAST_DETAILS.set(r.node.id, det); setCachedDetails(r.node.id, det); }
-    done++;
-    if(done % 5 === 0 || done === total){ render(rows, LAST_DETAILS); renderProfile(); }
-    const enriched = have + done;
-    setProgress(enriched, rows.length);
-    document.getElementById("status").textContent = `Loaded ${rows.length} items · enriching ${enriched}/${rows.length} (cached ${have}, fetched ${done})`;
+async function loadAllMyListIds(){
+  // minimal fetch to exclude all user statuses
+  const out = new Set();
+  let next = 0;
+  while(true){
+    const data = await API.animelist({ limit: 100, offset: next, fields: 'list_status' });
+    for(const it of (data.data||[])){
+      out.add(it.node.id);
+    }
+    if(!data.paging || !data.paging.next) break;
+    const u = new URL(data.paging.next);
+    next = parseInt(u.searchParams.get('offset')||'0',10);
+    await sleep(120);
   }
-  renderProfile();
-  document.getElementById("status").textContent = `Loaded ${rows.length} items · enriched ${rows.length}/${rows.length} (cached ${have}, fetched ${done})`;
-  setProgress(rows.length, rows.length);
+  excludeIdSet = out;
 }
 
-// ——— main actions ———
-document.getElementById("load").addEventListener("click", async () => {
-  try{
-    document.getElementById("status").textContent = "Loading…";
-    document.getElementById("diag").textContent = "";
-    LAST_ROWS=[]; LAST_DETAILS=new Map();
+async function handleLoad(){
+  reflectAuth();
+  setProgress(0, 1, 'Fetching your list…');
 
-    // load bias controls
-    document.getElementById("genreBiasOn").checked = BIAS.genreOn;
-    document.getElementById("genreBiasW").value   = BIAS.genreW;
-    document.getElementById("studioBiasOn").checked=BIAS.studioOn;
-    document.getElementById("studioBiasW").value  = BIAS.studioW;
+  // pull animelist
+  let items = [];
+  let total = 0, done = 0, next = 0;
+  const tag = ($('#tagInput').value||'Rewatch').trim();
+  const completedOnly = $('#completedOnly').checked;
 
-    const gateCompleted = document.getElementById("gateCompleted").checked;
-    const tagToken = document.getElementById("tagToken").value;
-
-    const items = await fetchAllList();
-    LAST_ALL_ITEMS = items.slice();
-
-    const filt = items.filter(x=>{
-      const ls=x.list_status||{};
-      const hasTag=tokenHasTag(ls, tagToken);
-      const done=!gateCompleted || (ls.status && ls.status.toLowerCase()==="completed");
-      return hasTag && done;
+  while(true){
+    const data = await API.animelist({
+      limit: 100, offset: next,
+      fields: 'list_status{status,score,tags}',
+      // sort intentionally omitted to respect your live list ordering
     });
-
-    const rows = filt.slice().sort((a,b)=>{
-      const sa=a.list_status.score||0, sb=b.list_status.score||0;
-      if(sb!==sa) return sb-sa;
-      const ta=(a.node.title_english||a.node.title||"").toLowerCase();
-      const tb=(b.node.title_english||b.node.title||"").toLowerCase();
-      return ta.localeCompare(tb);
-    });
-
-    LAST_ROWS = rows;
-    render(rows, LAST_DETAILS);
-    renderProfile();
-    setProgress(0, rows.length);
-    document.getElementById("status").textContent = `Loaded ${rows.length} items · enriching…`;
-
-    await enrichAll(rows);
-  }catch(e){
-    document.getElementById("status").textContent = e.message || "Error.";
+    const batch = (data.data||[]);
+    items.push(...batch);
+    if(!data.paging || !data.paging.next) break;
+    const u = new URL(data.paging.next);
+    next = parseInt(u.searchParams.get('offset')||'0',10);
   }
-});
 
-// ——— exports
-function generateCSV(rows, detailsMap){
-  const headers=["Title","My Score","Genres","Year","Type","Ep","Studios","Link"];
-  const lines=[headers.join(",")];
-  for(const row of rows){
-    const v=toDisplayRow(row, detailsMap.get(row.node.id));
-    const title=`"${(v.title||"").replace(/"/g,'""')}"`;
-    const score=v.score==="—"?"":v.score;
-    const genres=`"${v.genresArr.join("; ").replace(/"/g,'""')}"`;
-    const studios=`"${v.studiosArr.join("; ").replace(/"/g,'""')}"`;
-    const year=v.year||"";
-    const type=`"${(v.type||"").replace(/"/g,'""')}"`;
-    const ep=v.ep||"";
-    const link=v.link;
-    lines.push([title,score,genres,year,type,ep,studios,link].join(","));
+  // keep full list ids for rec exclusion
+  allList = items;
+
+  // filter for exact tag "Rewatch" after splitting comma tags
+  const filtered = items.filter(it => {
+    const ls = it.node.my_list_status || it.node.list_status; // MAL uses list_status in list responses
+    const tags = ls && (ls.tags || '');
+    const hasTag = commaTagsInclude(tags, tag);
+    const statusOk = !completedOnly || (ls && ls.status === 'completed');
+    return hasTag && statusOk;
+  });
+
+  total = filtered.length;
+  setProgress(0, total, `Found ${total} Rewatch entries. Enriching…`);
+
+  // Enrich with details (polite concurrency + cache)
+  const cacheStats = loadLS('cacheStats', {hits:0,miss:0});
+  const out = [];
+  const fields = 'alternative_titles,genres,studios,start_season,num_episodes,media_type';
+  const queue = [...filtered];
+  const concurrency = 6;
+  let active = 0;
+
+  async function worker(){
+    while(queue.length){
+      const it = queue.shift();
+      const id = it.node.id;
+      const ls = it.node.list_status || it.node.my_list_status || {};
+      let det = cacheGet('anime:'+id);
+      if(det){ cacheStats.hits++; }
+      if(!det){
+        // retry wrapper
+        let attempts = 0;
+        while(true){
+          try{
+            det = await API.animeDetails(id, fields);
+            cacheSet('anime:'+id, det);
+            cacheStats.miss++;
+            break;
+          }catch(err){
+            attempts++;
+            if(attempts >= 3) throw err;
+            await sleep(500 * attempts);
+          }
+        }
+      }
+      const title = parseEnglishTitle(det);
+      const genres = (det.genres||[]).map(g=>g.name);
+      const studios = (det.studios||[]).map(s=>s.name);
+      const start = det.start_season && det.start_season.year;
+      out.push({
+        id,
+        title,
+        genres,
+        studios,
+        year: start || '',
+        type: det.media_type || '',
+        episodes: det.num_episodes || '',
+        myScore: ls.score || 0
+      });
+      done++;
+      setProgress(done, total, `Enriched ${done}/${total}`);
+    }
   }
-  return lines.join("\n");
+
+  const workers = Array.from({length:Math.min(concurrency, queue.length)}, worker);
+  await Promise.all(workers);
+  saveLS('cacheStats', cacheStats);
+
+  // sort alpha by title
+  rewatchRows = out.sort((a,b)=>a.title.localeCompare(b.title));
+
+  updateSnapshot();
+  renderTable();
 }
-function generateMarkdown(rows, detailsMap){
-  const header="| Title | My Score | Genres | Year | Type | Ep | Studios | Link |\n|---|---:|---|---:|---|---:|---|---|";
-  const lines=[header];
-  for(const row of rows){
-    const v=toDisplayRow(row, detailsMap.get(row.node.id));
-    const score=v.score==="—"?"—":String(v.score);
-    lines.push(`| ${v.title} | ${score} | ${v.genresArr.join(", ")} | ${v.year||""} | ${v.type||""} | ${v.ep||""} | ${v.studiosArr.join(", ")} | ${v.link} |`);
-  }
-  return lines.join("\n");
-}
-document.getElementById("exportCsv").addEventListener("click", ()=>{
-  if(!LAST_ROWS.length) return (document.getElementById("status").textContent="Load the list first.");
-  const csv=generateCSV(LAST_ROWS,LAST_DETAILS); download("rewatch_list.csv", csv, "text/csv;charset=utf-8;");
-});
-document.getElementById("exportMd").addEventListener("click", ()=>{
-  if(!LAST_ROWS.length) return (document.getElementById("status").textContent="Load the list first.");
-  const md=generateMarkdown(LAST_ROWS,LAST_DETAILS); download("rewatch_list.md", md, "text/markdown;charset=utf-8;");
-});
-document.getElementById("copyMd").addEventListener("click", async ()=>{
-  if(!LAST_ROWS.length) return (document.getElementById("status").textContent="Load the list first.");
-  const md=generateMarkdown(LAST_ROWS,LAST_DETAILS);
-  try{ await navigator.clipboard.writeText(md); document.getElementById("status").textContent="Markdown copied to clipboard."; }
-  catch{
-    const ta=document.createElement("textarea"); ta.value=md; document.body.appendChild(ta); ta.select();
-    const ok=document.execCommand("copy"); ta.remove();
-    document.getElementById("status").textContent = ok?"Markdown copied (fallback).":"Clipboard blocked — use Download Markdown instead.";
-  }
-});
-function download(filename,text,mime){ const blob=new Blob([text],{type:mime||"text/plain;charset=utf-8"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
 
-// ——— diagnostics (unchanged) ———
-document.getElementById("debug").addEventListener("click", ()=>{
-  if(!LAST_ALL_ITEMS.length){ document.getElementById("status").textContent="Load the list first."; return; }
-  const tagToken=document.getElementById("tagToken").value.toLowerCase();
-  const tagCounts=new Map(), statusCounts=new Map();
-  for(const it of LAST_ALL_ITEMS){
-    const tags=listStatusTokens(it.list_status).map(t=>t.toLowerCase());
-    for(const t of tags) tagCounts.set(t,(tagCounts.get(t)||0)+1);
-    if(tags.includes(tagToken)){ const st=statusName(it.list_status&&it.list_status.status); statusCounts.set(st,(statusCounts.get(st)||0)+1); }
-  }
-  const tagLines=[...tagCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([t,c])=>`${t||"(empty)"}: ${c}`).join(" • ");
-  const stLines=[...statusCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([s,c])=>`${s}: ${c}`).join(" • ");
-  document.getElementById("status").textContent = `Tag variants seen → ${tagLines || "none"}  ||  By status for “${tagToken}” → ${stLines || "none"}`;
-});
-document.getElementById("missing").addEventListener("click", ()=>{
-  if(!LAST_ALL_ITEMS.length){ document.getElementById("status").textContent="Load the list first."; return; }
-  const gateCompleted=document.getElementById("gateCompleted").checked;
-  const tagToken=document.getElementById("tagToken").value.toLowerCase();
-  const reasons={ notCompleted:[], tagMismatch:[] };
-  for(const it of LAST_ALL_ITEMS){
-    const ls=it.list_status||{};
-    const tags=listStatusTokens(ls).map(t=>t.toLowerCase());
-    const hasTag=tags.includes(tagToken);
-    const done=ls.status && ls.status.toLowerCase()==="completed";
-    if(!hasTag) reasons.tagMismatch.push(it.node.title_english||it.node.title||`ID ${it.node.id}`);
-    else if(gateCompleted && !done) reasons.notCompleted.push(it.node.title_english||it.node.title||`ID ${it.node.id}`);
-  }
-  const top5=(arr)=>arr.slice(0,5).join(" | ")+(arr.length>5?` …(+${arr.length-5})`:"");
-  document.getElementById("status").textContent = `Excluded — Tag mismatch: ${reasons.tagMismatch.length} (e.g., ${top5(reasons.tagMismatch)}) | Not completed: ${reasons.notCompleted.length} (e.g., ${top5(reasons.notCompleted)})`;
-});
-document.getElementById("findVariant").addEventListener("click", ()=>{
-  const token=(document.getElementById("variantToken").value||"").trim().toLowerCase();
-  if(!token){ document.getElementById("diag").textContent="Enter a tag token (e.g., rewwatch)."; return; }
-  if(!LAST_ALL_ITEMS.length){ document.getElementById("status").textContent="Load the list first."; return; }
-  const matches=LAST_ALL_ITEMS.filter(it=>listStatusTokens(it.list_status).map(t=>t.toLowerCase()).includes(token));
-  const ul=matches.map(it=>{
-    const title=it.node.title_english||it.node.title||`ID ${it.node.id}`;
-    const link=`https://myanimelist.net/anime/${it.node.id}`;
-    return `<li><a href="${link}" target="_blank">${title}</a></li>`;
-  }).join("");
-  document.getElementById("diag").innerHTML = matches.length?`<b>Titles tagged “${token}” (${matches.length}):</b><ul>${ul}</ul>`:`No titles found with tag “${token}”.`;
-});
-
-// ——— XML diff (same improved logic) ———
-function parseMalXML(text){ const out=[]; try{ const doc=new DOMParser().parseFromString(text,"application/xml"); const nodes=doc.getElementsByTagName("anime"); for(let i=0;i<nodes.length;i++){ const n=nodes[i]; const id=(n.getElementsByTagName("series_animedb_id")[0]?.textContent||"").trim(); const title=(n.getElementsByTagName("series_title")[0]?.textContent||"").trim(); const status=(n.getElementsByTagName("my_status")[0]?.textContent||"").trim(); const tags=(n.getElementsByTagName("my_tags")[0]?.textContent||"").trim(); out.push({id,title,status,tags}); } }catch{} return out; }
-function statusIsCompletedXML(s){ const v=(s||"").trim().toLowerCase(); return v==="completed"||v==="2"; }
-document.getElementById("xmlDiff").addEventListener("click", async ()=>{
-  const file=document.getElementById("xmlFile").files[0];
-  if(!file){ document.getElementById("diag").textContent="Choose your MAL XML export file first."; return; }
-  const text=await file.text(); const rows=parseMalXML(text);
-  if(!rows.length){ document.getElementById("diag").textContent="Could not parse XML."; return; }
-
-  const xmlSet=new Set(), titleById=new Map();
+/* ---------- Exports ---------- */
+function toCSV(rows){
+  const head = ['Title','My Score','Genres','Year','Type','Ep','Studios','Link'];
+  const lines = [head.join(',')];
   for(const r of rows){
-    const tags=splitListCSV(r.tags).map(t=>t.toLowerCase());
-    if(tags.includes("rewatch") && statusIsCompletedXML(r.status) && r.id){ xmlSet.add(String(r.id)); titleById.set(String(r.id), r.title||`ID ${r.id}`); }
+    const cols = [
+      `"${r.title.replace(/"/g,'""')}"`,
+      fmtScore(r.myScore),
+      `"${r.genres.slice(0,3).join(' / ').replace(/"/g,'""')}"`,
+      r.year||'',
+      r.type||'',
+      r.episodes||'',
+      `"${r.studios.slice(0,2).join(' / ').replace(/"/g,'""')}"`,
+      MAL_LINK(r.id)
+    ];
+    lines.push(cols.join(','));
   }
+  return lines.join('\n');
+}
+function toMarkdown(rows){
+  const head = '| Title | My Score | Genres | Year | Type | Ep | Studios |\n|---|---:|---|---:|---|---:|---|\n';
+  const body = rows.map(r => `| [${r.title}](${MAL_LINK(r.id)}) | ${fmtScore(r.myScore)} | ${r.genres.slice(0,3).join(' / ')} | ${r.year||''} | ${r.type||''} | ${r.episodes||''} | ${r.studios.slice(0,2).join(' / ')} |`).join('\n');
+  return head + body + '\n';
+}
+function download(name, text, type='text/plain'){
+  const blob = new Blob([text], {type});
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href:url, download:name });
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
 
-  if(!LAST_ALL_ITEMS.length){ document.getElementById("status").textContent="Load the list first."; return; }
-  const liveMap=new Map();
-  for(const it of LAST_ALL_ITEMS){
-    const id=String(it.node.id);
-    const status=(it.list_status?.status||"").toLowerCase();
-    const tagsRaw=(it.list_status?.tags||[]);
-    const tagsLower=tagsRaw.map(t=>(t||"").trim().toLowerCase()).filter(Boolean);
-    liveMap.set(id,{status,tagsLower,tagsRaw});
+/* ---------- Recommender ---------- */
+function getBias(){
+  const b = loadLS('bias', null) || {};
+  // sync from UI as source of truth
+  b.gbOn = $('#genreBiasOn').checked;
+  b.sbOn = $('#studioBiasOn').checked;
+  b.gbW = parseFloat($('#genreBiasW').value||'0');
+  b.sbW = parseFloat($('#studioBiasW').value||'0');
+  saveLS('bias', b);
+  return b;
+}
+
+function overlapCount(setA, arrB){
+  let c=0;
+  for(const x of arrB) if(setA.has(x)) c++;
+  return c;
+}
+
+function rationaleText(rec, gTopSet, sTopSet){
+  const gHits = (rec.genres||[]).filter(g=>gTopSet.has(g)).slice(0,3);
+  const sHits = (rec.studios||[]).filter(s=>sTopSet.has(s)).slice(0,2);
+  const parts = [];
+  if(gHits.length) parts.push(`shares top genres: ${gHits.join(', ')}`);
+  if(sHits.length) parts.push(`from favorite studio${sHits.length>1?'s':''}: ${sHits.join(', ')}`);
+  if(!parts.length) parts.push('tonal neighbor to your favorites');
+  return parts.join(' · ');
+}
+
+async function generateRecs(){
+  if(!rewatchRows.length){
+    alert('Load your Rewatch list first.');
+    return;
   }
-  const liveSet=new Set([...liveMap.entries()].filter(([id,info])=>info.tagsLower.includes("rewatch")&&info.status==="completed").map(([id])=>id));
-  const lost=[...xmlSet].filter(id=>!liveSet.has(id));
+  $('#recs').innerHTML = '<div class="note small">Finding candidates…</div>';
 
-  if(!lost.length){ document.getElementById("diag").innerHTML="<b>No differences:</b> All XML ‘Rewatch’ (Completed) entries are present in your live MAL ‘Rewatch’ (Completed)."; return; }
+  if(excludeIdSet.size === 0) await loadAllMyListIds();
 
-  const items=lost.slice(0,100).map(id=>{
-    const title=titleById.get(id)||`ID ${id}`; const live=liveMap.get(id); const link=`https://myanimelist.net/anime/${id}`;
-    if(!live) return `<li><a href="${link}" target="_blank">${title}</a> — <i>not found in current API list</i></li>`;
-    const tagList=(live.tagsRaw||[]).join(", ")||"—";
-    const reason= live.tagsLower.includes("rewatch") ? (live.status==="completed" ? "?? (should match)" : "status ≠ Completed") : "live tags do not include ‘Rewatch’";
-    return `<li><a href="${link}" target="_blank">${title}</a> — live status: <b>${live.status||"—"}</b>; live tags: <b>${tagList}</b> → <u>${reason}</u></li>`;
-  }).join("");
-  document.getElementById("diag").innerHTML =
-    `<b>XML said these had ‘Rewatch’ (Completed), but live API disagrees:</b> ${lost.length} item(s).
-     <ul>${items}</ul>
-     <div class="muted">Tip: After fixing on MAL, click <b>Load List</b> to refresh before re-running the diff.</div>`;
-});
+  const gTopSet = new Set(topGenres.map(x=>x.name));
+  const sTopSet = new Set(topStudios.map(x=>x.name));
+  const bias = getBias();
 
-// ——— clear cache & bias listeners ———
-document.getElementById("clearCache").addEventListener("click", ()=>{
-  localStorage.removeItem(CACHE_KEY); CACHE={}; LAST_DETAILS=new Map(); if(LAST_ROWS.length) render(LAST_ROWS,LAST_DETAILS);
-  setProgress(0, LAST_ROWS.length||100);
-  document.getElementById("status").textContent="Details cache cleared.";
-});
-document.getElementById("genreBiasOn").addEventListener("change", e=>{ BIAS.genreOn=e.target.checked; saveBias(); });
-document.getElementById("studioBiasOn").addEventListener("change", e=>{ BIAS.studioOn=e.target.checked; saveBias(); });
-document.getElementById("genreBiasW").addEventListener("change", e=>{ BIAS.genreW=parseFloat(e.target.value)||0; saveBias(); });
-document.getElementById("studioBiasW").addEventListener("change", e=>{ BIAS.studioW=parseFloat(e.target.value)||0; saveBias(); });
+  // Fetch two ranking pools and merge
+  let candidates = [];
+  const fields = 'id,title,alternative_titles,mean,genres,studios,start_season,media_type';
+  const pools = [
+    API.animeRanking('bypopularity', 100, 0, fields),
+    API.animeRanking('all', 100, 0, fields),
+  ];
+  const [pop, all] = await Promise.all(pools);
+  const uniq = new Map();
+  for(const src of [pop, all]){
+    for(const item of (src.data || [])){
+      const n = item.node || item; // tolerate shapes
+      uniq.set(n.id, n);
+    }
+  }
+  // Score candidates
+  const scored = [];
+  for(const n of uniq.values()){
+    if(excludeIdSet.has(n.id)) continue; // on any status
+    const title = parseEnglishTitle(n);
+    const genres = (n.genres||[]).map(g=>g.name);
+    const studios = (n.studios||[]).map(s=>s.name);
+    const gOverlap = overlapCount(gTopSet, genres);
+    const sOverlap = overlapCount(sTopSet, studios);
+    if(gOverlap===0 && sOverlap===0) continue; // keep signal tight for phase 1
+
+    let base = 1 + gOverlap + sOverlap;
+    const mean = typeof n.mean === 'number' ? n.mean : 0;
+    base += mean * 0.02; // small quality nudge
+
+    let mult = 1;
+    if(bias.sbOn) mult *= (1 + (bias.sbW||0) * sOverlap);
+    if(bias.gbOn) mult *= (1 + (bias.gbW||0) * gOverlap);
+
+    const score = base * mult;
+    scored.push({
+      id:n.id, title, genres, studios, mean, score
+    });
+  }
+  scored.sort((a,b)=> b.score - a.score);
+
+  const picks = scored.slice(0, 12);
+  const recsEl = $('#recs');
+  recsEl.innerHTML = '';
+  for(const r of picks){
+    const div = document.createElement('div');
+    div.className = 'rec';
+    const rationale = rationaleText(r, gTopSet, sTopSet);
+    div.innerHTML = `
+      <h4><a href="${MAL_LINK(r.id)}" target="_blank" rel="noopener">${r.title}</a></h4>
+      <div class="small muted">${rationale}${r.mean ? ` · MAL mean ${r.mean.toFixed(1)}` : ''}</div>
+      <div class="chips" style="margin-top:6px;">
+        ${(r.genres||[]).slice(0,3).map(g=>`<span class="pill">${g}</span>`).join(' ')}
+        ${(r.studios||[]).slice(0,2).map(s=>`<span class="pill">${s}</span>`).join(' ')}
+      </div>
+    `;
+    recsEl.appendChild(div);
+  }
+}
+
+/* ---------- Wire UI ---------- */
+$('#loadBtn').onclick = handleLoad;
+$('#csvBtn').onclick = () => download('rewatch.csv', toCSV(rewatchRows), 'text/csv');
+$('#mdBtn').onclick = () => download('rewatch.md', toMarkdown(rewatchRows), 'text/markdown');
+$('#copyMdBtn').onclick = async () => {
+  await navigator.clipboard.writeText(toMarkdown(rewatchRows));
+  alert('Markdown copied.');
+};
+$('#clearCacheBtn').onclick = () => {
+  Object.keys(localStorage).forEach(k => { if(k.startsWith('cache:anime:') || k==='cacheStats') localStorage.removeItem(k); });
+  alert('Cleared cached details.');
+};
+$('#searchBox').addEventListener('input', renderTable);
+$('#minScore').addEventListener('change', renderTable);
+$('#genreBiasOn').addEventListener('change', ()=>{ saveLS('bias', getBias()); renderTable(); });
+$('#studioBiasOn').addEventListener('change', ()=>{ saveLS('bias', getBias()); renderTable(); });
+$('#genreBiasW').addEventListener('change', ()=> saveLS('bias', getBias()));
+$('#studioBiasW').addEventListener('change', ()=> saveLS('bias', getBias()));
+$('#genRecsBtn').onclick = generateRecs;
+
+// restore saved bias
+const savedBias = loadLS('bias', null);
+if(savedBias){
+  $('#genreBiasOn').checked = !!savedBias.gbOn;
+  $('#studioBiasOn').checked = !!savedBias.sbOn;
+  if(typeof savedBias.gbW === 'number') $('#genreBiasW').value = savedBias.gbW;
+  if(typeof savedBias.sbW === 'number') $('#studioBiasW').value = savedBias.sbW;
+}
 </script>
 </body>
 </html>
