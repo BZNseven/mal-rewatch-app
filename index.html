@@ -563,21 +563,30 @@ function getBias(){
 function franchiseKey(title){
   var t = String(title || '').toLowerCase();
 
-  // 1) Normalize punctuation/variants
-  t = t.replace(/[\u00B0'’´`]/g, '');    // degree/quotes variations → remove
-  t = t.replace(/[:(].*$/, '');          // cut subtitle parts after ":" or "("
+  // Normalize punctuation variants
+  t = t.replace(/[\u00B0'’´`]/g, '');
 
-  // 2) Collapse to plain tokens
+  // Cut subtitles after ":" or "("
+  t = t.replace(/[:(].*$/, '');
+
+  // If there's a dot segment that ends with "... Arc", drop everything from the dot
+  // e.g., "Gintama. Slip Arc" => "gintama"
+  t = t.replace(/\.[^.]*\barc\b.*$/i, '');
+
+  // Collapse to plain tokens
   t = t.replace(/[^a-z0-9]+/g, ' ').trim();
 
-  // 3) If a generic continuation term appears, drop it and everything after.
-  //    This collapses "gintama movie 2", "gintama season 4", etc. → "gintama"
+  // Drop generic continuation terms and anything after them
+  // (movie/season/special/ova/ona/film/chapter/part/arc/final/edition/remaster/rebroadcast)
   t = t.replace(/\b(movie|season|special|ova|ona|film|chapter|part|arc|final|edition|remaster|rebroadcast)\b.*$/, '');
 
-  // 4) Remove trailing numerals/roman numerals (e.g., "... ii", "... 2")
+  // Remove trailing numerals or roman numerals (e.g., "... 2", "... iv")
   t = t.replace(/\b([ivxlcdm]+|\d+)\b$/i, '');
 
-  // 5) Clean leftover spaces
+  // Trim dangling stopwords at the end (e.g., "gintama the" => "gintama")
+  t = t.replace(/\b(the|a|an|and|of|no|to|for)\b$/i, '').trim();
+
+  // Clean double spaces
   t = t.replace(/\s{2,}/g, ' ').trim();
 
   return t;
@@ -777,6 +786,7 @@ $('#genRecsBtn').onclick = generateRecs;
 </script>
 </body>
 </html>
+
 
 
 
