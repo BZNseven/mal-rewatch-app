@@ -665,12 +665,28 @@ async function generateRecs(){
     var studioCounts = new Map();
     function hasTopStudio(r){ for(var i=0;i<r.studios.length;i++) if(sTopSet.has(r.studios[i])) return true; return false; }
     function canTake(r){
-      for(var i=0;i<r.studios.length;i++){ var s=r.studios[i]; if((studioCounts.get(s)||0) >= 2) return false; }
-      return true;
-    }
-    function take(r, arr){ arr.push(r); r.studios.forEach(function(s){ studioCounts.set(s, (studioCounts.get(s)||0)+1); }); }
+  // Block duplicates by franchise key
+  var k = r.key || franchiseKey(r.title);
+  if (keySeen.has(k)) return false;
+
+  // Studio cap: max 2 per studio
+  for (var i = 0; i < r.studios.length; i++){
+    var s = r.studios[i];
+    if ((studioCounts.get(s) || 0) >= 2) return false;
+  }
+  return true;
+}
+function take(r, arr){
+  var k = r.key || franchiseKey(r.title);
+  keySeen.add(k); // remember this franchise
+  arr.push(r);
+  r.studios.forEach(function(s){
+    studioCounts.set(s, (studioCounts.get(s) || 0) + 1);
+  });
+}
 
     var picks = [];
+    var keySeen = new Set(); // final guard: 1 per franchise in the rendered list
     var favs = deduped.filter(hasTopStudio);
     for(var f=0; f<favs.length && picks.length<3; f++){ if(canTake(favs[f])) take(favs[f], picks); }
     for(var m=0; m<deduped.length && picks.length<12; m++){
@@ -761,5 +777,6 @@ $('#genRecsBtn').onclick = generateRecs;
 </script>
 </body>
 </html>
+
 
 
