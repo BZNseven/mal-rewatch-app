@@ -5,191 +5,216 @@
   <title>BZN7 Rewatch Curator</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; }
-    button { padding: .6rem 1rem; border-radius: .5rem; border: 1px solid #ccc; cursor: pointer; margin-right:.5rem; }
-    input[type="text"] { padding:.4rem .6rem; border-radius:.4rem; border:1px solid #ccc; min-width:240px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-    th, td { border: 1px solid #ddd; padding: .5rem; }
-    th { background: #f7f7f7; text-align: left; }
-    .muted { color: #777; margin-left: .5rem; }
+    :root{
+      --bar-bg:#e5e7eb; --bar-fg:#10b981; --bar-fg2:#3b82f6; --ink:#111827; --muted:#6b7280; --card:#f9fafb; --line:#e5e7eb;
+    }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; color: var(--ink); }
+    header { position: sticky; top:0; z-index: 10; background: #fff; border-bottom: 1px solid var(--line); }
+    #progWrap { height:8px; background: var(--bar-bg); overflow:hidden; }
+    #progBar  { height:100%; width:0%; background: linear-gradient(90deg, var(--bar-fg), var(--bar-fg2)); transition: width .2s ease; }
+    #top { display:flex; align-items:center; gap:.75rem; padding: 12px 16px; flex-wrap: wrap; }
+    #status { color: var(--muted); font-size:.9rem; }
+    main { padding: 20px 16px 32px; max-width: 1200px; margin: 0 auto; }
+    button { padding: .6rem 1rem; border-radius: .55rem; border: 1px solid #d1d5db; background:#fff; cursor: pointer; margin-right:.5rem; }
+    button:hover { background:#f3f4f6; }
+    input[type="text"], input[type="number"] { padding:.45rem .6rem; border-radius:.45rem; border:1px solid #d1d5db; }
+    input[type="number"] { width: 5.5rem; }
     .row { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; }
     label { white-space:nowrap; }
-    #diag { margin-top:1rem; font-size:.95rem; }
+    .panel { background: var(--card); border:1px solid var(--line); border-radius: .75rem; padding: 12px 14px; margin: 12px 0; }
+    .panel h3 { margin: 0 0 8px 0; font-size: 1rem; }
+    .kv { display:grid; grid-template-columns: 140px 1fr auto; gap: .4rem .8rem; align-items:center; }
+    .bar { height:8px; background: var(--bar-bg); border-radius: 999px; overflow:hidden; }
+    .bar > span { display:block; height:100%; background: var(--bar-fg2); }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    th, td { border: 1px solid #e5e7eb; padding: .5rem; }
+    th { background: #f7f7f7; text-align: left; }
+    .muted { color: var(--muted); }
     #diag ul { margin:.4rem 0 0 1.2rem; }
+    .controls { gap: .6rem 1rem; }
+    .chip { display:inline-block; padding:.1rem .5rem; border:1px solid var(--line); border-radius:999px; background:#fff; margin-right:.25rem; font-size:.85rem; }
   </style>
 </head>
 <body>
-  <h1>Rewatch Curator (MAL)</h1>
+  <header>
+    <div id="progWrap"><div id="progBar"></div></div>
+    <div id="top">
+      <button onclick="location.href='/auth/start'">Sign in with MAL</button>
+      <button onclick="logout()">Logout</button>
+      <span id="status" class="muted"></span>
+    </div>
+  </header>
 
-  <div id="auth" class="row">
-    <button onclick="location.href='/auth/start'">Sign in with MAL</button>
-    <button onclick="logout()">Logout</button>
-    <span id="status" class="muted"></span>
-  </div>
+  <main>
+    <div class="panel">
+      <div class="row controls">
+        <label><input type="checkbox" id="gateCompleted" checked /> Completed only</label>
+        <label>Tag:
+          <select id="tagToken">
+            <option value="Rewatch" selected>Rewatch</option>
+            <option value="rw-list">rw-list</option>
+          </select>
+        </label>
+        <button id="load">Load List</button>
+        <button id="exportCsv">Download CSV</button>
+        <button id="exportMd">Download Markdown</button>
+        <button id="copyMd">Copy Markdown</button>
+        <button id="debug">Debug Counts</button>
+        <button id="missing">Explain Missing</button>
+        <label>Find tag token: <input id="variantToken" type="text" placeholder="e.g., rewwatch" /></label>
+        <button id="findVariant">Find</button>
+        <label>XML export: <input id="xmlFile" type="file" accept=".xml,text/xml" /></label>
+        <button id="xmlDiff">XML diff</button>
+        <button id="clearCache" title="Forget cached details">Clear details cache</button>
+      </div>
+    </div>
 
-  <div id="controls" class="row" style="margin-top:1rem;">
-    <label><input type="checkbox" id="gateCompleted" checked /> Completed only</label>
-    <label>Tag:
-      <select id="tagToken">
-        <option value="Rewatch" selected>Rewatch</option>
-        <option value="rw-list">rw-list</option>
-      </select>
-    </label>
-    <button id="load">Load List</button>
-    <button id="exportCsv">Download CSV</button>
-    <button id="exportMd">Download Markdown</button>
-    <button id="copyMd">Copy Markdown</button>
-    <button id="debug">Debug Counts</button>
-    <button id="missing">Explain Missing</button>
-  </div>
+    <div class="panel" id="profilePanel" style="display:none;">
+      <h3>Profile Snapshot</h3>
+      <div class="row" style="gap:1rem;">
+        <div class="chip">Favorites set from your Rewatch list, weighted by your scores.</div>
+      </div>
+      <div class="row" style="gap:2rem; margin-top:.5rem; flex-wrap:wrap;">
+        <div style="min-width:300px; flex:1;">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <strong>Top Genres</strong>
+            <label class="muted">Bias
+              <input type="checkbox" id="genreBiasOn" checked />
+              weight <input type="number" id="genreBiasW" min="0" max="2" step="0.05" value="1.15" />
+            </label>
+          </div>
+          <div id="profileGenres" class="kv"></div>
+        </div>
+        <div style="min-width:300px; flex:1;">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <strong>Top Studios</strong>
+            <label class="muted">Bias
+              <input type="checkbox" id="studioBiasOn" checked />
+              weight <input type="number" id="studioBiasW" min="0" max="2" step="0.05" value="1.25" />
+            </label>
+          </div>
+          <div id="profileStudios" class="kv"></div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:.5rem;">Settings are saved in your browser and will be used when we add on-page recommendations.</div>
+    </div>
 
-  <div class="row" style="margin-top:.5rem;">
-    <label>Find titles with tag token:
-      <input id="variantToken" type="text" placeholder="e.g., rewwatch" />
-    </label>
-    <button id="findVariant">Find</button>
+    <table id="tbl" style="display:none;">
+      <thead>
+        <tr>
+          <th>Title</th><th>My Score</th><th>Genres</th><th>Year</th><th>Type</th><th>Ep</th><th>Studios</th><th>Link</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
 
-    <label>XML diff (upload old export): 
-      <input id="xmlFile" type="file" accept=".xml,text/xml" />
-    </label>
-    <button id="xmlDiff">Find 'Rewatch' lost vs live</button>
-
-    <button id="clearCache" title="Forget cached details (useful if studios/genres changed)">Clear details cache</button>
-  </div>
-
-  <table id="tbl" style="display:none;">
-    <thead>
-      <tr>
-        <th>Title</th><th>My Score</th><th>Genres</th><th>Year</th><th>Type</th><th>Ep</th><th>Studios</th><th>Link</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-  <div id="diag" class="muted"></div>
+    <div id="diag" class="muted"></div>
+  </main>
 
 <script>
 let LAST_ROWS = [];           // filtered + sorted rows currently shown
 let LAST_DETAILS = new Map(); // id -> details (genres/studios/etc)
 let LAST_ALL_ITEMS = [];      // raw items from MAL (unfiltered)
 
-// ——— config for enrichment ———
+// ——— enrichment + cache config ———
 const DETAILS_FIELDS = "genres,studios,start_season,num_episodes,media_type";
-const RATE_DELAY_MS = 600;          // polite throttle between detail requests
-const MAX_RETRIES = 3;              // retry on 429/5xx with backoff
+const RATE_DELAY_MS = 600;
+const MAX_RETRIES = 3;
 const CACHE_KEY = "mal_details_cache_v1";
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 90; // 90 days
-
-// ——— cache helpers ———
 let CACHE = loadCache();
 
-function loadCache() {
-  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "{}"); }
-  catch { return {}; }
+// ——— bias settings (persisted) ———
+const BIAS_KEY = "bias_settings_v1";
+let BIAS = loadBias();
+
+function loadBias() {
+  try {
+    const x = JSON.parse(localStorage.getItem(BIAS_KEY) || "{}");
+    return {
+      genreOn: x.genreOn ?? true,
+      genreW:  typeof x.genreW === "number" ? x.genreW : 1.15,
+      studioOn: x.studioOn ?? true,
+      studioW:  typeof x.studioW === "number" ? x.studioW : 1.25,
+    };
+  } catch { return { genreOn:true, genreW:1.15, studioOn:true, studioW:1.25 }; }
 }
-function saveCacheSoon() {
-  // debounce writes
-  clearTimeout(saveCacheSoon._t);
-  saveCacheSoon._t = setTimeout(() => {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify(CACHE)); } catch {}
-  }, 250);
-}
-function getCachedDetails(id) {
-  const e = CACHE[id];
-  if (!e) return null;
-  if ((Date.now() - e.ts) > CACHE_TTL_MS) { delete CACHE[id]; saveCacheSoon(); return null; }
-  return e.data || null;
-}
-function setCachedDetails(id, data) {
-  CACHE[id] = { ts: Date.now(), data };
-  saveCacheSoon();
+function saveBias() {
+  try { localStorage.setItem(BIAS_KEY, JSON.stringify(BIAS)); } catch {}
+  // show current in status for quick sanity
+  console.log("Bias saved:", BIAS);
 }
 
-// ——— general helpers ———
-async function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
-
-async function logout() {
-  await fetch("/api/logout");
-  document.getElementById("status").textContent = "Logged out.";
+// ——— progress bar ———
+function setProgress(done, total) {
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  document.getElementById("progBar").style.width = pct + "%";
 }
 
-function splitListCSV(value) {
-  return (value || "")
-    .split(",")
-    .map(s => s.trim())
-    .filter(Boolean);
-}
-function listStatusTokens(ls) {
-  if (!ls || !ls.tags) return [];
-  return splitListCSV(ls.tags.join(","));
-}
-function tokenHasTag(ls, tagToken) {
-  const t = (tagToken || "").trim().toLowerCase();
-  if (!t) return false;
-  return listStatusTokens(ls).map(x => x.toLowerCase()).includes(t);
-}
-function statusName(s) { return (s || "").toLowerCase() || "unknown"; }
+// ——— cache helpers ———
+function loadCache() { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "{}"); } catch { return {}; } }
+function saveCacheSoon() { clearTimeout(saveCacheSoon._t); saveCacheSoon._t = setTimeout(() => { try { localStorage.setItem(CACHE_KEY, JSON.stringify(CACHE)); } catch {} }, 250); }
+function getCachedDetails(id) { const e = CACHE[id]; if (!e) return null; if ((Date.now()-e.ts) > CACHE_TTL_MS) { delete CACHE[id]; saveCacheSoon(); return null; } return e.data || null; }
+function setCachedDetails(id,data){ CACHE[id]={ts:Date.now(),data}; saveCacheSoon(); }
 
-// ——— API calls ———
-async function fetchAllList() {
-  const rows = [];
-  let offset = 0;
-  const limit = 100;
-  const fields = "list_status{tags,score,status,is_rewatching,num_times_rewatched,rewatch_value}";
-  while (true) {
-    const url = `/api/animelist?limit=${limit}&offset=${offset}&fields=${encodeURIComponent(fields)}`;
-    const r = await fetch(url);
-    if (r.status === 401) throw new Error("Not signed in.");
-    if (!r.ok) throw new Error("Animelist error: " + (await r.text()));
-    const j = await r.json();
-    (j.data || []).forEach(item => rows.push(item));
-    if (!j.paging || !j.paging.next) break;
-    offset += limit;
+// ——— utils ———
+async function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+async function logout(){ await fetch("/api/logout"); document.getElementById("status").textContent = "Logged out."; }
+
+function splitListCSV(value){ return (value||"").split(",").map(s=>s.trim()).filter(Boolean); }
+function listStatusTokens(ls){ if(!ls||!ls.tags) return []; return splitListCSV(ls.tags.join(",")); }
+function tokenHasTag(ls,tag){ const t=(tag||"").trim().toLowerCase(); if(!t) return false; return listStatusTokens(ls).map(x=>x.toLowerCase()).includes(t); }
+function statusName(s){ return (s||"").toLowerCase()||"unknown"; }
+
+// ——— API ———
+async function fetchAllList(){
+  const rows=[]; let offset=0; const limit=100;
+  const fields="list_status{tags,score,status,is_rewatching,num_times_rewatched,rewatch_value}";
+  while(true){
+    const url=`/api/animelist?limit=${limit}&offset=${offset}&fields=${encodeURIComponent(fields)}`;
+    const r=await fetch(url);
+    if(r.status===401) throw new Error("Not signed in.");
+    if(!r.ok) throw new Error("Animelist error: " + (await r.text()));
+    const j=await r.json();
+    (j.data||[]).forEach(it=>rows.push(it));
+    if(!j.paging || !j.paging.next) break;
+    offset+=limit;
   }
   return rows;
 }
-
-async function fetchDetailsWithRetry(id) {
-  let attempt = 0;
-  while (attempt < MAX_RETRIES) {
+async function fetchDetailsWithRetry(id){
+  let attempt=0;
+  while(attempt<MAX_RETRIES){
     attempt++;
     const r = await fetch(`/api/anime/${id}?fields=${encodeURIComponent(DETAILS_FIELDS)}`);
-    if (r.ok) return r.json();
-    // backoff on rate/temporary errors
-    if (r.status === 429 || (r.status >= 500 && r.status < 600)) {
-      await sleep(RATE_DELAY_MS * attempt);
-      continue;
-    }
-    // other errors: give up for this id
+    if(r.ok) return r.json();
+    if(r.status===429 || (r.status>=500 && r.status<600)){ await sleep(RATE_DELAY_MS*attempt); continue; }
     return null;
   }
   return null;
 }
 
-// ——— transform + render ———
-function toDisplayRow(row, details) {
-  const n = row.node;
-  const ls = row.list_status || {};
-  const d = details || {};
+// ——— render ———
+function toDisplayRow(row, details){
+  const n=row.node, ls=row.list_status||{}, d=details||{};
   const title = n.title_english || n.title || "—";
-  const score = (ls.score && ls.score !== 0) ? ls.score : "—";
-  const genresArr = (d.genres || []).slice(0,3).map(g => g.name);
-  const studiosArr = (d.studios || []).slice(0,2).map(s => s.name);
-  const year = (d.start_season && d.start_season.year) ? d.start_season.year : "";
-  const type = d.media_type || n.media_type || "";
-  const ep = (typeof d.num_episodes === "number") ? d.num_episodes : (n.num_episodes || "");
-  const link = `https://myanimelist.net/anime/${n.id}`;
-  return { title, score, genresArr, year, type, ep, studiosArr, link, id: n.id };
+  const score = (ls.score && ls.score!==0) ? ls.score : "—";
+  const genresArr=(d.genres||[]).slice(0,3).map(g=>g.name);
+  const studiosArr=(d.studios||[]).slice(0,2).map(s=>s.name);
+  const year=(d.start_season&&d.start_season.year)?d.start_season.year:"";
+  const type=d.media_type || n.media_type || "";
+  const ep=(typeof d.num_episodes==="number")?d.num_episodes:(n.num_episodes||"");
+  const link=`https://myanimelist.net/anime/${n.id}`;
+  return { title, score, genresArr, year, type, ep, studiosArr, link, id:n.id };
 }
-
-function render(rows, detailsMap) {
-  const tbody = document.querySelector("#tbl tbody");
-  tbody.innerHTML = "";
-  for (const row of rows) {
-    const d = detailsMap.get(row.node.id);
-    const v = toDisplayRow(row, d);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
+function render(rows, detailsMap){
+  const tbody=document.querySelector("#tbl tbody");
+  tbody.innerHTML="";
+  for(const row of rows){
+    const d=detailsMap.get(row.node.id);
+    const v=toDisplayRow(row,d);
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
       <td>${v.title}</td>
       <td style="text-align:right">${v.score}</td>
       <td>${v.genresArr.join(", ")}</td>
@@ -200,298 +225,254 @@ function render(rows, detailsMap) {
       <td><a href="${v.link}" target="_blank">MAL</a></td>`;
     tbody.appendChild(tr);
   }
-  document.getElementById("tbl").style.display = "";
+  document.getElementById("tbl").style.display="";
+}
+
+// ——— profile (weighted) ———
+function computeProfile(rows, detailsMap){
+  const g=new Map(), s=new Map();
+  let maxG=0, maxS=0;
+  for(const r of rows){
+    const w = r.list_status?.score || 0; if(!w) continue;
+    const d = detailsMap.get(r.node.id); if(!d) continue;
+    for(const gg of (d.genres||[])){ const k=gg.name; const v=(g.get(k)||0)+w; g.set(k,v); if(v>maxG) maxG=v; }
+    for(const st of (d.studios||[])){ const k=st.name; const v=(s.get(k)||0)+w; s.set(k,v); if(v>maxS) maxS=v; }
+  }
+  const norm = (m,max) => [...m.entries()].map(([k,v]) => [k, max? +(v/max).toFixed(2):0]).sort((a,b)=>b[1]-a[1]);
+  return { genres: norm(g,maxG), studios: norm(s,maxS) };
+}
+function renderProfile(){
+  if(!LAST_ROWS.length || LAST_DETAILS.size===0){ document.getElementById("profilePanel").style.display="none"; return; }
+  const prof = computeProfile(LAST_ROWS, LAST_DETAILS);
+  const gTop = prof.genres.slice(0,8);
+  const sTop = prof.studios.slice(0,8);
+
+  const mk = (arr) => arr.map(([name,score]) => `
+      <div class="muted">${name}</div>
+      <div class="bar"><span style="width:${Math.round(score*100)}%"></span></div>
+      <div class="muted">${score.toFixed(2)}</div>
+  `).join("");
+
+  document.getElementById("profileGenres").innerHTML = mk(gTop);
+  document.getElementById("profileStudios").innerHTML = mk(sTop);
+  document.getElementById("profilePanel").style.display="";
 }
 
 // ——— enrichment orchestration ———
-async function enrichAll(rows) {
-  // Pre-fill from cache
-  let have = 0;
-  for (const r of rows) {
-    const id = r.node.id;
-    const cached = getCachedDetails(id);
-    if (cached) { LAST_DETAILS.set(id, cached); have++; }
-  }
+async function enrichAll(rows){
+  // prefill from cache
+  let have=0;
+  for(const r of rows){ const id=r.node.id; const c=getCachedDetails(id); if(c){ LAST_DETAILS.set(id,c); have++; } }
   render(rows, LAST_DETAILS);
+  setProgress(have, rows.length);
 
-  // Fetch missing progressively with throttle
-  const missing = rows.filter(r => !LAST_DETAILS.has(r.node.id));
-  let done = 0, total = missing.length;
-  for (const r of missing) {
+  // fetch missing with throttle
+  const missing = rows.filter(r=>!LAST_DETAILS.has(r.node.id));
+  let done=0, total=missing.length;
+  for(const r of missing){
     await sleep(RATE_DELAY_MS);
     const det = await fetchDetailsWithRetry(r.node.id);
-    if (det) {
-      LAST_DETAILS.set(r.node.id, det);
-      setCachedDetails(r.node.id, det);
-    }
+    if(det){ LAST_DETAILS.set(r.node.id, det); setCachedDetails(r.node.id, det); }
     done++;
-    // Re-render periodically so the table fills in as we go
-    if (done % 5 === 0 || done === total) {
-      render(rows, LAST_DETAILS);
-    }
-    document.getElementById("status").textContent =
-      `Loaded ${rows.length} items; enriched ${have + done}/${rows.length} (cached ${have}, fetched ${done}).`;
+    if(done % 5 === 0 || done === total){ render(rows, LAST_DETAILS); renderProfile(); }
+    const enriched = have + done;
+    setProgress(enriched, rows.length);
+    document.getElementById("status").textContent = `Loaded ${rows.length} items · enriching ${enriched}/${rows.length} (cached ${have}, fetched ${done})`;
   }
-
-  document.getElementById("status").textContent =
-    `Loaded ${rows.length} items; enriched ${rows.length}/${rows.length}. Details are cached locally for faster future loads.`;
+  renderProfile();
+  document.getElementById("status").textContent = `Loaded ${rows.length} items · enriched ${rows.length}/${rows.length} (cached ${have}, fetched ${done})`;
+  setProgress(rows.length, rows.length);
 }
 
 // ——— main actions ———
 document.getElementById("load").addEventListener("click", async () => {
-  try {
+  try{
     document.getElementById("status").textContent = "Loading…";
     document.getElementById("diag").textContent = "";
-    LAST_ROWS = [];
-    LAST_DETAILS = new Map();
+    LAST_ROWS=[]; LAST_DETAILS=new Map();
+
+    // load bias controls
+    document.getElementById("genreBiasOn").checked = BIAS.genreOn;
+    document.getElementById("genreBiasW").value   = BIAS.genreW;
+    document.getElementById("studioBiasOn").checked=BIAS.studioOn;
+    document.getElementById("studioBiasW").value  = BIAS.studioW;
 
     const gateCompleted = document.getElementById("gateCompleted").checked;
     const tagToken = document.getElementById("tagToken").value;
 
     const items = await fetchAllList();
-    LAST_ALL_ITEMS = items.slice(); // keep raw set for diagnostics
+    LAST_ALL_ITEMS = items.slice();
 
-    // Filter to exact tag + (optional) completed
-    const filt = items.filter(x => {
-      const ls = x.list_status || {};
-      const hasTag = tokenHasTag(ls, tagToken);
-      const done = !gateCompleted || (ls.status && ls.status.toLowerCase() === "completed");
+    const filt = items.filter(x=>{
+      const ls=x.list_status||{};
+      const hasTag=tokenHasTag(ls, tagToken);
+      const done=!gateCompleted || (ls.status && ls.status.toLowerCase()==="completed");
       return hasTag && done;
     });
 
-    // Sort by score desc (0 lowest), then title asc
-    const rows = filt.slice().sort((a,b) => {
-      const sa = a.list_status.score || 0, sb = b.list_status.score || 0;
-      if (sb !== sa) return sb - sa;
-      const ta = (a.node.title_english || a.node.title || "").toLowerCase();
-      const tb = (b.node.title_english || b.node.title || "").toLowerCase();
+    const rows = filt.slice().sort((a,b)=>{
+      const sa=a.list_status.score||0, sb=b.list_status.score||0;
+      if(sb!==sa) return sb-sa;
+      const ta=(a.node.title_english||a.node.title||"").toLowerCase();
+      const tb=(b.node.title_english||b.node.title||"").toLowerCase();
       return ta.localeCompare(tb);
     });
 
     LAST_ROWS = rows;
-
-    // Initial render (may include cached details)
     render(rows, LAST_DETAILS);
-    document.getElementById("status").textContent =
-      `Loaded ${rows.length} items; enriching details…`;
+    renderProfile();
+    setProgress(0, rows.length);
+    document.getElementById("status").textContent = `Loaded ${rows.length} items · enriching…`;
 
-    // Enrich EVERYTHING with cache + throttle + retries
     await enrichAll(rows);
-
-  } catch (e) {
+  }catch(e){
     document.getElementById("status").textContent = e.message || "Error.";
   }
 });
 
-// Exports (use whatever details are currently available; best after enrichment completes)
-function generateCSV(rows, detailsMap) {
-  const headers = ["Title","My Score","Genres","Year","Type","Ep","Studios","Link"];
-  const lines = [headers.join(",")];
-  for (const row of rows) {
-    const v = toDisplayRow(row, detailsMap.get(row.node.id));
-    const title = `"${(v.title || "").replace(/"/g, '""')}"`;
-    const score = v.score === "—" ? "" : v.score;
-    const genres = `"${v.genresArr.join("; ").replace(/"/g, '""')}"`;
-    const studios = `"${v.studiosArr.join("; ").replace(/"/g, '""')}"`;
-    const year = v.year || "";
-    const type = `"${(v.type||"").replace(/"/g, '""')}"`;
-    const ep = v.ep || "";
-    const link = v.link;
-    lines.push([title, score, genres, year, type, ep, studios, link].join(","));
+// ——— exports
+function generateCSV(rows, detailsMap){
+  const headers=["Title","My Score","Genres","Year","Type","Ep","Studios","Link"];
+  const lines=[headers.join(",")];
+  for(const row of rows){
+    const v=toDisplayRow(row, detailsMap.get(row.node.id));
+    const title=`"${(v.title||"").replace(/"/g,'""')}"`;
+    const score=v.score==="—"?"":v.score;
+    const genres=`"${v.genresArr.join("; ").replace(/"/g,'""')}"`;
+    const studios=`"${v.studiosArr.join("; ").replace(/"/g,'""')}"`;
+    const year=v.year||"";
+    const type=`"${(v.type||"").replace(/"/g,'""')}"`;
+    const ep=v.ep||"";
+    const link=v.link;
+    lines.push([title,score,genres,year,type,ep,studios,link].join(","));
   }
   return lines.join("\n");
 }
-function generateMarkdown(rows, detailsMap) {
-  const header = "| Title | My Score | Genres | Year | Type | Ep | Studios | Link |\n|---|---:|---|---:|---|---:|---|---|";
-  const lines = [header];
-  for (const row of rows) {
-    const v = toDisplayRow(row, detailsMap.get(row.node.id));
-    const score = v.score === "—" ? "—" : String(v.score);
+function generateMarkdown(rows, detailsMap){
+  const header="| Title | My Score | Genres | Year | Type | Ep | Studios | Link |\n|---|---:|---|---:|---|---:|---|---|";
+  const lines=[header];
+  for(const row of rows){
+    const v=toDisplayRow(row, detailsMap.get(row.node.id));
+    const score=v.score==="—"?"—":String(v.score);
     lines.push(`| ${v.title} | ${score} | ${v.genresArr.join(", ")} | ${v.year||""} | ${v.type||""} | ${v.ep||""} | ${v.studiosArr.join(", ")} | ${v.link} |`);
   }
   return lines.join("\n");
 }
-document.getElementById("exportCsv").addEventListener("click", () => {
-  if (!LAST_ROWS.length) return (document.getElementById("status").textContent = "Load the list first.");
-  const csv = generateCSV(LAST_ROWS, LAST_DETAILS);
-  download("rewatch_list.csv", csv, "text/csv;charset=utf-8;");
+document.getElementById("exportCsv").addEventListener("click", ()=>{
+  if(!LAST_ROWS.length) return (document.getElementById("status").textContent="Load the list first.");
+  const csv=generateCSV(LAST_ROWS,LAST_DETAILS); download("rewatch_list.csv", csv, "text/csv;charset=utf-8;");
 });
-document.getElementById("exportMd").addEventListener("click", () => {
-  if (!LAST_ROWS.length) return (document.getElementById("status").textContent = "Load the list first.");
-  const md = generateMarkdown(LAST_ROWS, LAST_DETAILS);
-  download("rewatch_list.md", md, "text/markdown;charset=utf-8;");
+document.getElementById("exportMd").addEventListener("click", ()=>{
+  if(!LAST_ROWS.length) return (document.getElementById("status").textContent="Load the list first.");
+  const md=generateMarkdown(LAST_ROWS,LAST_DETAILS); download("rewatch_list.md", md, "text/markdown;charset=utf-8;");
 });
-document.getElementById("copyMd").addEventListener("click", async () => {
-  if (!LAST_ROWS.length) return (document.getElementById("status").textContent = "Load the list first.");
-  const md = generateMarkdown(LAST_ROWS, LAST_DETAILS);
-  try {
-    await navigator.clipboard.writeText(md);
-    document.getElementById("status").textContent = "Markdown copied to clipboard.";
-  } catch {
-    const ta = document.createElement("textarea");
-    ta.value = md;
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    ta.remove();
-    document.getElementById("status").textContent = ok ? "Markdown copied (fallback)." : "Clipboard blocked — use Download Markdown instead.";
+document.getElementById("copyMd").addEventListener("click", async ()=>{
+  if(!LAST_ROWS.length) return (document.getElementById("status").textContent="Load the list first.");
+  const md=generateMarkdown(LAST_ROWS,LAST_DETAILS);
+  try{ await navigator.clipboard.writeText(md); document.getElementById("status").textContent="Markdown copied to clipboard."; }
+  catch{
+    const ta=document.createElement("textarea"); ta.value=md; document.body.appendChild(ta); ta.select();
+    const ok=document.execCommand("copy"); ta.remove();
+    document.getElementById("status").textContent = ok?"Markdown copied (fallback).":"Clipboard blocked — use Download Markdown instead.";
   }
 });
+function download(filename,text,mime){ const blob=new Blob([text],{type:mime||"text/plain;charset=utf-8"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
 
-// Diagnostics: counts
-document.getElementById("debug").addEventListener("click", () => {
-  if (!LAST_ALL_ITEMS.length) {
-    document.getElementById("status").textContent = "Load the list first.";
-    return;
+// ——— diagnostics (unchanged) ———
+document.getElementById("debug").addEventListener("click", ()=>{
+  if(!LAST_ALL_ITEMS.length){ document.getElementById("status").textContent="Load the list first."; return; }
+  const tagToken=document.getElementById("tagToken").value.toLowerCase();
+  const tagCounts=new Map(), statusCounts=new Map();
+  for(const it of LAST_ALL_ITEMS){
+    const tags=listStatusTokens(it.list_status).map(t=>t.toLowerCase());
+    for(const t of tags) tagCounts.set(t,(tagCounts.get(t)||0)+1);
+    if(tags.includes(tagToken)){ const st=statusName(it.list_status&&it.list_status.status); statusCounts.set(st,(statusCounts.get(st)||0)+1); }
   }
-  const tagToken = document.getElementById("tagToken").value.toLowerCase();
-  const tagCounts = new Map();
-  const statusCounts = new Map();
-  for (const it of LAST_ALL_ITEMS) {
-    const tags = listStatusTokens(it.list_status).map(t => t.toLowerCase());
-    for (const t of tags) tagCounts.set(t, (tagCounts.get(t)||0) + 1);
-    if (tags.includes(tagToken)) {
-      const st = statusName(it.list_status && it.list_status.status);
-      statusCounts.set(st, (statusCounts.get(st)||0) + 1);
-    }
-  }
-  const tagLines = [...tagCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([t,c])=>`${t||"(empty)"}: ${c}`).join(" • ");
-  const stLines  = [...statusCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([s,c])=>`${s}: ${c}`).join(" • ");
-  document.getElementById("status").textContent =
-    `Tag variants seen → ${tagLines || "none"}  ||  By status for “${tagToken}” → ${stLines || "none"}`;
+  const tagLines=[...tagCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([t,c])=>`${t||"(empty)"}: ${c}`).join(" • ");
+  const stLines=[...statusCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([s,c])=>`${s}: ${c}`).join(" • ");
+  document.getElementById("status").textContent = `Tag variants seen → ${tagLines || "none"}  ||  By status for “${tagToken}” → ${stLines || "none"}`;
 });
-
-// Diagnostics: explain missing
-document.getElementById("missing").addEventListener("click", () => {
-  if (!LAST_ALL_ITEMS.length) {
-    document.getElementById("status").textContent = "Load the list first.";
-    return;
+document.getElementById("missing").addEventListener("click", ()=>{
+  if(!LAST_ALL_ITEMS.length){ document.getElementById("status").textContent="Load the list first."; return; }
+  const gateCompleted=document.getElementById("gateCompleted").checked;
+  const tagToken=document.getElementById("tagToken").value.toLowerCase();
+  const reasons={ notCompleted:[], tagMismatch:[] };
+  for(const it of LAST_ALL_ITEMS){
+    const ls=it.list_status||{};
+    const tags=listStatusTokens(ls).map(t=>t.toLowerCase());
+    const hasTag=tags.includes(tagToken);
+    const done=ls.status && ls.status.toLowerCase()==="completed";
+    if(!hasTag) reasons.tagMismatch.push(it.node.title_english||it.node.title||`ID ${it.node.id}`);
+    else if(gateCompleted && !done) reasons.notCompleted.push(it.node.title_english||it.node.title||`ID ${it.node.id}`);
   }
-  const gateCompleted = document.getElementById("gateCompleted").checked;
-  const tagToken = document.getElementById("tagToken").value.toLowerCase();
-
-  const reasons = { notCompleted: [], tagMismatch: [] };
-  for (const it of LAST_ALL_ITEMS) {
-    const ls = it.list_status || {};
-    const tags = listStatusTokens(ls).map(t => t.toLowerCase());
-    const hasTag = tags.includes(tagToken);
-    const done = ls.status && ls.status.toLowerCase() === "completed";
-    if (!hasTag) reasons.tagMismatch.push(it.node.title_english || it.node.title || `ID ${it.node.id}`);
-    else if (gateCompleted && !done) reasons.notCompleted.push(it.node.title_english || it.node.title || `ID ${it.node.id}`);
-  }
-  const top5 = (arr) => arr.slice(0,5).join(" | ") + (arr.length > 5 ? ` …(+${arr.length-5})` : "");
-  document.getElementById("status").textContent =
-    `Excluded — Tag mismatch: ${reasons.tagMismatch.length} (e.g., ${top5(reasons.tagMismatch)}) | Not completed: ${reasons.notCompleted.length} (e.g., ${top5(reasons.notCompleted)})`;
+  const top5=(arr)=>arr.slice(0,5).join(" | ")+(arr.length>5?` …(+${arr.length-5})`:"");
+  document.getElementById("status").textContent = `Excluded — Tag mismatch: ${reasons.tagMismatch.length} (e.g., ${top5(reasons.tagMismatch)}) | Not completed: ${reasons.notCompleted.length} (e.g., ${top5(reasons.notCompleted)})`;
 });
-
-// Variant finder
-document.getElementById("findVariant").addEventListener("click", () => {
-  const token = (document.getElementById("variantToken").value || "").trim().toLowerCase();
-  if (!token) { document.getElementById("diag").textContent = "Enter a tag token (e.g., rewwatch)."; return; }
-  if (!LAST_ALL_ITEMS.length) { document.getElementById("status").textContent = "Load the list first."; return; }
-  const matches = LAST_ALL_ITEMS.filter(it =>
-    listStatusTokens(it.list_status).map(t => t.toLowerCase()).includes(token)
-  );
-  const ul = matches.map(it => {
-    const title = it.node.title_english || it.node.title || `ID ${it.node.id}`;
-    const link = `https://myanimelist.net/anime/${it.node.id}`;
+document.getElementById("findVariant").addEventListener("click", ()=>{
+  const token=(document.getElementById("variantToken").value||"").trim().toLowerCase();
+  if(!token){ document.getElementById("diag").textContent="Enter a tag token (e.g., rewwatch)."; return; }
+  if(!LAST_ALL_ITEMS.length){ document.getElementById("status").textContent="Load the list first."; return; }
+  const matches=LAST_ALL_ITEMS.filter(it=>listStatusTokens(it.list_status).map(t=>t.toLowerCase()).includes(token));
+  const ul=matches.map(it=>{
+    const title=it.node.title_english||it.node.title||`ID ${it.node.id}`;
+    const link=`https://myanimelist.net/anime/${it.node.id}`;
     return `<li><a href="${link}" target="_blank">${title}</a></li>`;
   }).join("");
-  document.getElementById("diag").innerHTML =
-    matches.length ? `<b>Titles tagged “${token}” (${matches.length}):</b><ul>${ul}</ul>` :
-                     `No titles found with tag “${token}”.`;
+  document.getElementById("diag").innerHTML = matches.length?`<b>Titles tagged “${token}” (${matches.length}):</b><ul>${ul}</ul>`:`No titles found with tag “${token}”.`;
 });
 
-// XML diff
-function parseMalXML(text) {
-  const out = [];
-  try {
-    const doc = new DOMParser().parseFromString(text, "application/xml");
-    const nodes = doc.getElementsByTagName("anime");
-    for (let i = 0; i < nodes.length; i++) {
-      const n = nodes[i];
-      const id = (n.getElementsByTagName("series_animedb_id")[0]?.textContent || "").trim();
-      const title = (n.getElementsByTagName("series_title")[0]?.textContent || "").trim();
-      const status = (n.getElementsByTagName("my_status")[0]?.textContent || "").trim();
-      const tags = (n.getElementsByTagName("my_tags")[0]?.textContent || "").trim();
-      out.push({ id, title, status, tags });
-    }
-  } catch {}
-  return out;
-}
-function statusIsCompletedXML(s) {
-  const v = (s || "").trim().toLowerCase();
-  return v === "completed" || v === "2";
-}
-document.getElementById("xmlDiff").addEventListener("click", async () => {
-  const file = document.getElementById("xmlFile").files[0];
-  if (!file) { document.getElementById("diag").textContent = "Choose your MAL XML export file first."; return; }
-  const text = await file.text();
-  const rows = parseMalXML(text);
-  if (!rows.length) { document.getElementById("diag").textContent = "Could not parse XML."; return; }
+// ——— XML diff (same improved logic) ———
+function parseMalXML(text){ const out=[]; try{ const doc=new DOMParser().parseFromString(text,"application/xml"); const nodes=doc.getElementsByTagName("anime"); for(let i=0;i<nodes.length;i++){ const n=nodes[i]; const id=(n.getElementsByTagName("series_animedb_id")[0]?.textContent||"").trim(); const title=(n.getElementsByTagName("series_title")[0]?.textContent||"").trim(); const status=(n.getElementsByTagName("my_status")[0]?.textContent||"").trim(); const tags=(n.getElementsByTagName("my_tags")[0]?.textContent||"").trim(); out.push({id,title,status,tags}); } }catch{} return out; }
+function statusIsCompletedXML(s){ const v=(s||"").trim().toLowerCase(); return v==="completed"||v==="2"; }
+document.getElementById("xmlDiff").addEventListener("click", async ()=>{
+  const file=document.getElementById("xmlFile").files[0];
+  if(!file){ document.getElementById("diag").textContent="Choose your MAL XML export file first."; return; }
+  const text=await file.text(); const rows=parseMalXML(text);
+  if(!rows.length){ document.getElementById("diag").textContent="Could not parse XML."; return; }
 
-  const xmlRewatchCompleted = new Set();
-  const xmlTitleById = new Map();
-  for (const r of rows) {
-    const tags = splitListCSV(r.tags).map(t => t.toLowerCase());
-    const isRewatch = tags.includes("rewatch");
-    const isCompleted = statusIsCompletedXML(r.status);
-    if (isRewatch && isCompleted && r.id) {
-      xmlRewatchCompleted.add(String(r.id));
-      xmlTitleById.set(String(r.id), r.title || `ID ${r.id}`);
-    }
+  const xmlSet=new Set(), titleById=new Map();
+  for(const r of rows){
+    const tags=splitListCSV(r.tags).map(t=>t.toLowerCase());
+    if(tags.includes("rewatch") && statusIsCompletedXML(r.status) && r.id){ xmlSet.add(String(r.id)); titleById.set(String(r.id), r.title||`ID ${r.id}`); }
   }
 
-  if (!LAST_ALL_ITEMS.length) { document.getElementById("status").textContent = "Load the list first."; return; }
-  const liveMap = new Map();
-  for (const it of LAST_ALL_ITEMS) {
-    const id = String(it.node.id);
-    const status = (it.list_status?.status || "").toLowerCase();
-    const tagsRaw = (it.list_status?.tags || []);
-    const tagsLower = tagsRaw.map(t => (t || "").trim().toLowerCase()).filter(Boolean);
-    liveMap.set(id, { status, tagsLower, tagsRaw });
+  if(!LAST_ALL_ITEMS.length){ document.getElementById("status").textContent="Load the list first."; return; }
+  const liveMap=new Map();
+  for(const it of LAST_ALL_ITEMS){
+    const id=String(it.node.id);
+    const status=(it.list_status?.status||"").toLowerCase();
+    const tagsRaw=(it.list_status?.tags||[]);
+    const tagsLower=tagsRaw.map(t=>(t||"").trim().toLowerCase()).filter(Boolean);
+    liveMap.set(id,{status,tagsLower,tagsRaw});
   }
-  const liveRewatchCompleted = new Set(
-    [...liveMap.entries()]
-      .filter(([id, info]) => info.tagsLower.includes("rewatch") && info.status === "completed")
-      .map(([id]) => id)
-  );
+  const liveSet=new Set([...liveMap.entries()].filter(([id,info])=>info.tagsLower.includes("rewatch")&&info.status==="completed").map(([id])=>id));
+  const lost=[...xmlSet].filter(id=>!liveSet.has(id));
 
-  const lost = [...xmlRewatchCompleted].filter(id => !liveRewatchCompleted.has(id));
-  if (!lost.length) {
-    document.getElementById("diag").innerHTML =
-      "<b>No differences:</b> All XML ‘Rewatch’ (Completed) entries are present in your live MAL ‘Rewatch’ (Completed).";
-    return;
-  }
+  if(!lost.length){ document.getElementById("diag").innerHTML="<b>No differences:</b> All XML ‘Rewatch’ (Completed) entries are present in your live MAL ‘Rewatch’ (Completed)."; return; }
 
-  const items = lost.slice(0, 100).map(id => {
-    const title = xmlTitleById.get(id) || `ID ${id}`;
-    const live = liveMap.get(id);
-    const link = `https://myanimelist.net/anime/${id}`;
-    if (!live) {
-      return `<li><a href="${link}" target="_blank">${title}</a> — <i>not found in current API list</i></li>`;
-      }
-    const tagList = (live.tagsRaw || []).join(", ") || "—";
-    const reason = live.tagsLower.includes("rewatch")
-      ? (live.status === "completed" ? "?? (should match)" : "status ≠ Completed")
-      : "live tags do not include ‘Rewatch’";
+  const items=lost.slice(0,100).map(id=>{
+    const title=titleById.get(id)||`ID ${id}`; const live=liveMap.get(id); const link=`https://myanimelist.net/anime/${id}`;
+    if(!live) return `<li><a href="${link}" target="_blank">${title}</a> — <i>not found in current API list</i></li>`;
+    const tagList=(live.tagsRaw||[]).join(", ")||"—";
+    const reason= live.tagsLower.includes("rewatch") ? (live.status==="completed" ? "?? (should match)" : "status ≠ Completed") : "live tags do not include ‘Rewatch’";
     return `<li><a href="${link}" target="_blank">${title}</a> — live status: <b>${live.status||"—"}</b>; live tags: <b>${tagList}</b> → <u>${reason}</u></li>`;
   }).join("");
-
   document.getElementById("diag").innerHTML =
     `<b>XML said these had ‘Rewatch’ (Completed), but live API disagrees:</b> ${lost.length} item(s).
      <ul>${items}</ul>
-     <div class="muted">Tip: After fixing a tag/status on MAL, click <b>Load List</b> again to refresh before re-running the diff.</div>`;
+     <div class="muted">Tip: After fixing on MAL, click <b>Load List</b> to refresh before re-running the diff.</div>`;
 });
 
-// Utilities
-document.getElementById("clearCache").addEventListener("click", () => {
-  localStorage.removeItem(CACHE_KEY);
-  CACHE = {};
-  LAST_DETAILS = new Map();
-  if (LAST_ROWS.length) render(LAST_ROWS, LAST_DETAILS);
-  document.getElementById("status").textContent = "Details cache cleared.";
+// ——— clear cache & bias listeners ———
+document.getElementById("clearCache").addEventListener("click", ()=>{
+  localStorage.removeItem(CACHE_KEY); CACHE={}; LAST_DETAILS=new Map(); if(LAST_ROWS.length) render(LAST_ROWS,LAST_DETAILS);
+  setProgress(0, LAST_ROWS.length||100);
+  document.getElementById("status").textContent="Details cache cleared.";
 });
+document.getElementById("genreBiasOn").addEventListener("change", e=>{ BIAS.genreOn=e.target.checked; saveBias(); });
+document.getElementById("studioBiasOn").addEventListener("change", e=>{ BIAS.studioOn=e.target.checked; saveBias(); });
+document.getElementById("genreBiasW").addEventListener("change", e=>{ BIAS.genreW=parseFloat(e.target.value)||0; saveBias(); });
+document.getElementById("studioBiasW").addEventListener("change", e=>{ BIAS.studioW=parseFloat(e.target.value)||0; saveBias(); });
 </script>
 </body>
 </html>
