@@ -375,13 +375,39 @@ async function handleLoad(){
   allList = items;
 
   // filter for exact tag "Rewatch" after splitting comma tags
-  const filtered = items.filter(it => {
-    const ls = it.node.my_list_status || it.node.list_status; // MAL uses list_status in list responses
-    const tags = ls && (ls.tags || '');
-    const hasTag = commaTagsInclude(tags, tag);
-    const statusOk = !completedOnly || (ls && ls.status === 'completed');
-    return hasTag && statusOk;
-  });
+  ChatGPT said:
+
+You’re right — searching with a dot at the end likely missed it. Let’s fix this cleanly with two tiny, exact replacements in index.html.
+
+We’ll change where we read list_status in:
+
+the filter step (decides which rows are “Rewatch”), and
+
+the enrichment step (reads your score for each row).
+
+Both should read from it.list_status first, not it.node.list_status.
+
+Patch 1 — Filter uses it.list_status
+
+What to search: const filtered = items.filter(it => {
+
+Open index.html → edit.
+
+Press Ctrl+F and search for:
+
+const filtered = items.filter(it => {
+
+
+Replace that whole filter block with this:
+
+const filtered = items.filter(it => {
+  // MAL returns list_status at the top level for each item
+  const ls = it.list_status || it.node.my_list_status || {};
+  const tags = ls && (ls.tags || '');
+  const hasTag = commaTagsInclude(tags, tag); // exact “Rewatch” match, case-insensitive
+  const statusOk = !completedOnly || (ls && ls.status === 'completed');
+  return hasTag && statusOk;
+});
 
   total = filtered.length;
   setProgress(0, total, `Found ${total} Rewatch entries. Enriching…`);
@@ -417,6 +443,7 @@ async function handleLoad(){
           }
         }
       }
+      const ls = it.list_status || it.node?.my_list_status || it.node?.list_status || {};
       const title = parseEnglishTitle(det);
       const genres = (det.genres||[]).map(g=>g.name);
       const studios = (det.studios||[]).map(s=>s.name);
@@ -611,5 +638,6 @@ if(savedBias){
 </script>
 </body>
 </html>
+
 
 
