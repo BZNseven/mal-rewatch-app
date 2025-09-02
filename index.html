@@ -16,6 +16,8 @@
       --border: #262a35;
       --chip: #222735;
       --highlight: rgba(74,163,255,0.12);
+      --red: #ff6b6b;
+      --red-2: #ff8b8b;
     }
     html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
     a { color: var(--accent); text-decoration: none; } a:hover{ text-decoration: underline; }
@@ -55,15 +57,19 @@
     .right { text-align:right; }
     .small { font-size:12px; }
     .authed-only { display:none; }
-    .error { color:#ff6b6b; }
-    /* E) Min Score menu readability */
+    .error { color:var(--red); }
+    /* Min Score menu readability */
     select#minScore option { color:#111; background:#fff; }
-    /* F) Dismiss button */
+    /* Red close button */
     .rec .rec-close {
       position:absolute; top:6px; right:8px; width:22px; height:22px; border-radius:50%;
-      border:1px solid var(--border); background:transparent; color:#bfc5d3; cursor:pointer; line-height:20px; text-align:center;
+      border:1px solid #ff6b6b66; background:transparent; color:var(--red); cursor:pointer; line-height:20px; text-align:center;
     }
-    .rec .rec-close:hover { color:#fff; }
+    .rec .rec-close:hover { color:var(--red-2); border-color:#ff6b6b99; background:#ff6b6b1a; }
+    /* Advanced toggle */
+    .adv-toggle { margin-left:auto; }
+    .adv-panel { display:none; margin-top:8px; padding:8px; border:1px dashed var(--border); border-radius:8px; background:#141825; }
+    .section-title{ font-weight:600; margin:6px 0; }
   </style>
 </head>
 <body>
@@ -77,10 +83,6 @@
         <div class="field"><label><input type="checkbox" id="completedOnly"> Completed only</label></div>
         <div class="field"><span class="muted">Tag:</span><input id="tagInput" type="text" value="Rewatch" size="10" /></div>
         <button id="loadBtn" class="btn primary">Load List</button>
-        <button id="csvBtn" class="btn authed-only">Download CSV</button>
-        <button id="mdBtn" class="btn authed-only">Download Markdown</button>
-        <button id="copyMdBtn" class="btn authed-only">Copy Markdown</button>
-        <button id="clearCacheBtn" class="btn warn authed-only" title="Clear cached detail lookups">Clear details cache</button>
       </div>
     </header>
 
@@ -114,23 +116,37 @@
     <section class="grid cols-2">
       <div class="card">
         <h3>Profile Snapshot</h3>
-        <div class="note small">Favorites set from your Rewatch list, weighted by your scores.</div>
+        <div class="note small">Favorites are computed from your current tag (e.g., “Rewatch”), weighted by your scores.</div>
         <div class="stack" style="margin-top:8px;">
           <div>
             <div class="row">
-              <strong>Top Genres</strong>
-              <label class="field"><input type="checkbox" id="genreBiasOn"> Bias</label>
-              <div class="field"><span>weight</span><input type="number" id="genreBiasW" min="0" step="0.1" max="3" value="0.8"></div>
+              <strong>Favorite Genres</strong>
             </div>
             <div id="topGenres" class="chips"></div>
-          </div>
-          <div>
-            <div class="row">
-              <strong>Top Studios</strong>
-              <label class="field"><input type="checkbox" id="studioBiasOn"> Bias</label>
-              <div class="field"><span>weight</span><input type="number" id="studioBiasW" min="0" step="0.1" max="3" value="0.8"></div>
+            <div class="note small" style="margin-top:6px;">
+              <span class="section-title">Top Genre Combos</span>
+              <div id="topGenreCombos" class="chips" style="margin-top:6px;"></div>
             </div>
+          </div>
+
+          <div>
+            <div class="row"><strong>Favorite Studios</strong></div>
             <div id="topStudios" class="chips"></div>
+          </div>
+
+          <div>
+            <div class="row"><strong>Favorite Seasons</strong> <span class="muted small">(premiere)</span></div>
+            <div id="topSeasons" class="chips"></div>
+          </div>
+
+          <div>
+            <div class="row"><strong>Favorite Decades</strong></div>
+            <div id="topDecades" class="chips"></div>
+          </div>
+
+          <div>
+            <div class="row"><strong>Average Score (this tag)</strong></div>
+            <div id="avgScore" class="chips"></div>
           </div>
         </div>
       </div>
@@ -139,7 +155,22 @@
         <h3>Recommendations</h3>
         <div class="row">
           <button id="genRecsBtn" class="btn primary authed-only">Generate recommendations</button>
-          <span class="note small">12 picks, max 1 per franchise. PTW/On-Hold are allowed and labeled.</span>
+          <button id="advToggle" class="btn ghost adv-toggle">⚙️ Advanced</button>
+        </div>
+        <div id="advPanel" class="adv-panel">
+          <div class="row">
+            <strong>Bias</strong>
+            <label class="field"><input type="checkbox" id="genreBiasOn" checked> Genre bias</label>
+            <div class="field"><span>weight</span><input type="number" id="genreBiasW" min="0" step="0.1" max="3" value="0.8"></div>
+            <label class="field"><input type="checkbox" id="studioBiasOn" checked> Studio bias</label>
+            <div class="field"><span>weight</span><input type="number" id="studioBiasW" min="0" step="0.1" max="3" value="0.8"></div>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <button id="csvBtn" class="btn authed-only">Download CSV</button>
+            <button id="mdBtn" class="btn authed-only">Download Markdown</button>
+            <button id="copyMdBtn" class="btn authed-only">Copy Markdown</button>
+            <button id="clearCacheBtn" class="btn warn authed-only" title="Clear cached detail lookups">Clear details cache</button>
+          </div>
         </div>
         <div id="recs" class="recs" style="margin-top:10px;"></div>
       </div>
@@ -229,18 +260,18 @@ var topGenres = [];
 var topStudios = [];
 var excludeIdSet = new Set();
 
-// B) For PTW/On-Hold badges and selective exclude
+// For PTW/On-Hold badges and selective exclude
 var ptwIdSet = new Set();
 var onHoldIdSet = new Set();
 
-// G) Per-session rotation + seen
+// Per-session rotation + seen
 var seenRecIds = new Set();
 var recsSeed = Number(sessionStorage.getItem('recsSeed') || '0') | 0;
 (function initSeen(){ try{ JSON.parse(sessionStorage.getItem('seenRecIds') || '[]').forEach(function(id){ seenRecIds.add(id); }); }catch(e){} })();
 function saveSeen(){ sessionStorage.setItem('seenRecIds', JSON.stringify(Array.from(seenRecIds).slice(-500))); }
 function bumpRecsSeed(){ recsSeed = (recsSeed + 1) % 6; sessionStorage.setItem('recsSeed', String(recsSeed)); }
 
-// F) Dismissed recs persist
+// Dismissed recs persist
 function getSkipRecs(){ try { return new Set(JSON.parse(localStorage.getItem('skipRecs') || '[]')); } catch(e){ return new Set(); } }
 function addSkipRec(id){ var s = getSkipRecs(); s.add(id); localStorage.setItem('skipRecs', JSON.stringify(Array.from(s))); }
 
@@ -257,7 +288,7 @@ function cacheSet(key, val){
 
 /* ---------- Auth UI ---------- */
 function reflectAuth(){
-  var has = !!getCookie('mal_access'); // cookie is HttpOnly, so this may be false even when logged in
+  var has = !!getCookie('mal_access'); // HttpOnly cookie likely invisible; we also unhide post-load
   $$('.authed-only').forEach(function(el){ el.style.display = has ? '' : 'none'; });
 }
 $('#loginBtn').onclick = function(){ window.location.href = '/.netlify/functions/auth-start'; };
@@ -277,6 +308,18 @@ function commaTagsInclude(tags, needle){
 }
 function fmtScore(s){ return s && s > 0 ? String(s) : '—'; }
 function chip(text){ var c = document.createElement('span'); c.className='chip'; c.textContent = text; return c; }
+
+/* ---------- Snapshot computations ---------- */
+function topNFromMap(map, n){ return Array.from(map.entries()).map(function(e){ return {name:e[0], weight:e[1]} }).sort(function(a,b){ return b.weight - a.weight; }).slice(0,n); }
+function decadeOf(year){ var d = Math.floor(year/10)*10; return d ? (d+'s') : ''; }
+function seasonLabel(s){ return s ? (s[0].toUpperCase()+s.slice(1)) : ''; }
+function seasonFromMonth(m){
+  // Winter: Dec-Feb; Spring: Mar-May; Summer: Jun-Aug; Fall: Sep-Nov
+  if(m===12 || m===1 || m===2) return 'Winter';
+  if(m>=3 && m<=5) return 'Spring';
+  if(m>=6 && m<=8) return 'Summer';
+  return 'Fall';
+}
 
 function renderTable(){
   var q = ($('#searchBox').value || '').toLowerCase();
@@ -313,26 +356,74 @@ function renderTable(){
 }
 
 function updateSnapshot(){
+  // Weighted by score (0 excluded)
   var gCounts = new Map();
   var sCounts = new Map();
+  var seasonCounts = new Map(); // premiere season
+  var decadeCounts = new Map();
+  var scores = [];
+
   rewatchRows.forEach(function(r){
     var w = r.myScore && r.myScore > 0 ? r.myScore : 0;
     if(w === 0) return;
+    scores.push(w);
+
     r.genres.forEach(function(g){ gCounts.set(g, (gCounts.get(g)||0) + w); });
     r.studios.forEach(function(s){ sCounts.set(s, (sCounts.get(s)||0) + w); });
-  });
-  function toArr(m){
-    return Array.from(m.entries()).map(function(e){ return {name:e[0], weight:Math.round(e[1])}; }).sort(function(a,b){ return b.weight - a.weight; }).slice(0,12);
-  }
-  topGenres = toArr(gCounts);
-  topStudios = toArr(sCounts);
 
+    if(r.season){ var S = seasonLabel(r.season); if(S) seasonCounts.set(S, (seasonCounts.get(S)||0) + w); }
+    if(r.year){ var D = decadeOf(r.year); if(D) decadeCounts.set(D, (decadeCounts.get(D)||0) + w); }
+  });
+
+  // Top lists
+  topGenres = topNFromMap(gCounts, 12).map(function(x){ x.weight = Math.round(x.weight); return x; });
+  topStudios = topNFromMap(sCounts, 12).map(function(x){ x.weight = Math.round(x.weight); return x; });
+  var topSeasons = topNFromMap(seasonCounts, 4).map(function(x){ x.weight = Math.round(x.weight); return x; });
+  var topDecades = topNFromMap(decadeCounts, 4).map(function(x){ x.weight = Math.round(x.weight); return x; });
+
+  // Genre combos (top 5)
+  var combos = new Map();
+  rewatchRows.forEach(function(r){
+    var w = r.myScore && r.myScore > 0 ? r.myScore : 0;
+    if(!w) return;
+    var gs = r.genres.slice().sort();
+    for(var i=0;i<gs.length;i++){
+      for(var j=i+1;j<gs.length;j++){
+        var key = gs[i] + ' + ' + gs[j];
+        combos.set(key, (combos.get(key)||0) + w);
+      }
+    }
+  });
+  var topCombos = topNFromMap(combos, 5).map(function(x){ x.weight = Math.round(x.weight); return x; });
+
+  // Render chips
   var tg = $('#topGenres'); tg.innerHTML = '';
   topGenres.forEach(function(g){ tg.appendChild(chip(g.name+' · '+g.weight)); });
+
+  var tgc = $('#topGenreCombos'); tgc.innerHTML = '';
+  topCombos.forEach(function(c){ tgc.appendChild(chip(c.name+' · '+c.weight)); });
+
   var ts = $('#topStudios'); ts.innerHTML = '';
   topStudios.forEach(function(s){ ts.appendChild(chip(s.name+' · '+s.weight)); });
 
-  // persist bias UI
+  var tsea = $('#topSeasons'); tsea.innerHTML = '';
+  topSeasons.forEach(function(s){ tsea.appendChild(chip(s.name+' · '+s.weight)); });
+
+  var tdec = $('#topDecades'); tdec.innerHTML = '';
+  topDecades.forEach(function(d){ tdec.appendChild(chip(d.name+' · '+d.weight)); });
+
+  var avgEl = $('#avgScore');
+  if(scores.length){
+    var sum = scores.reduce(function(a,b){ return a+b; }, 0);
+    var avg = (sum / scores.length).toFixed(2);
+    var sorted = scores.slice().sort(function(a,b){ return a-b; });
+    var m = sorted.length%2 ? sorted[(sorted.length-1)/2] : ((sorted[sorted.length/2-1]+sorted[sorted.length/2])/2);
+    avgEl.innerHTML = ''; avgEl.appendChild(chip('avg '+avg)); avgEl.appendChild(chip('median '+(Math.round(m*10)/10)));
+  }else{
+    avgEl.innerHTML = '<span class="muted small">No non-zero scores.</span>';
+  }
+
+  // persist bias UI (Advanced panel)
   var gbOn = $('#genreBiasOn').checked, sbOn = $('#studioBiasOn').checked;
   var gbW = parseFloat($('#genreBiasW').value||'0'), sbW = parseFloat($('#studioBiasW').value||'0');
   saveLS('bias', { gbOn:gbOn, sbOn:sbOn, gbW:gbW, sbW:sbW });
@@ -368,7 +459,7 @@ async function handleLoad(){
   try {
     var items = [], next = 0;
     while(true){
-      var data = await API.animelist({ limit: 100, offset: next, fields: 'list_status{status,score,tags}' });
+      var data = await API.animelist({ limit: 100, offset: next, fields: 'list_status{status,score,tags,finish_date}' });
       items = items.concat(data.data||[]);
       if(!data.paging || !data.paging.next) break;
       var u = new URL(data.paging.next);
@@ -376,10 +467,10 @@ async function handleLoad(){
     }
     allList = items;
 
-    // D) show authed controls now that a call succeeded
+    // Show authed controls now that a call succeeded
     $$('.authed-only').forEach(function(el){ el.style.display = 'inline-block'; });
 
-    // filter
+    // Filter by tag
     var tag = ($('#tagInput').value||'Rewatch').trim();
     var completedOnly = $('#completedOnly').checked;
     var filtered = items.filter(function(it){
@@ -391,9 +482,9 @@ async function handleLoad(){
     });
 
     var total = filtered.length;
-    setProgress(0,total,'Found '+total+' Rewatch entries. Enriching…');
+    setProgress(0,total,'Found '+total+' '+(tag||'')+' entries. Enriching…');
 
-    // Enrich
+    // Enrich details
     var cacheStats = loadLS('cacheStats', {hits:0,miss:0});
     var out = [], fields='alternative_titles,genres,studios,start_season,num_episodes,media_type';
     var queue = filtered.slice(); var done = 0; var concurrency = 6;
@@ -413,9 +504,11 @@ async function handleLoad(){
         var title = parseEnglishTitle(det);
         var genres = (det.genres||[]).map(function(g){ return g.name; });
         var studios = (det.studios||[]).map(function(s){ return s.name; });
-        var start = det.start_season && det.start_season.year;
+        var startYear = det.start_season && det.start_season.year;
+        var startSeason = det.start_season && det.start_season.season;
+        var finishDate = ls && ls.finish_date || '';
 
-        out.push({ id:id, title:title, genres:genres, studios:studios, year:start||'', type:det.media_type||'', episodes:det.num_episodes||'', myScore: ls.score || 0 });
+        out.push({ id:id, title:title, genres:genres, studios:studios, year:startYear||'', season:startSeason||'', type:det.media_type||'', episodes:det.num_episodes||'', myScore: ls.score || 0, finish: finishDate });
         done++; setProgress(done,total,'Enriched '+done+'/'+total);
       }
     }
@@ -474,7 +567,7 @@ function franchiseKey(title){
   return t;
 }
 
-// F) Dismiss handler
+// Dismiss handler
 $('#recs').addEventListener('click', function(e){
   var btn = e.target.closest('.rec-close'); if(!btn) return;
   var id = Number(btn.getAttribute('data-id')); addSkipRec(id); seenRecIds.add(id); saveSeen();
@@ -482,7 +575,7 @@ $('#recs').addEventListener('click', function(e){
 });
 
 async function generateRecs(){
-  if(!rewatchRows.length){ alert('Load your Rewatch list first.'); return; }
+  if(!rewatchRows.length){ alert('Load your list first.'); return; }
   $('#recs').innerHTML = '<div class="note small">Finding candidates…</div>';
 
   try{
@@ -493,7 +586,7 @@ async function generateRecs(){
     var bias = getBias();
     var skip = getSkipRecs();
 
-    // G) rotate offsets to vary results per click
+    // rotate offsets to vary results per click
     var offA = (recsSeed % 3) * 100;
     var offB = ((recsSeed + 1) % 3) * 100;
     var fields = 'id,title,alternative_titles,mean,genres,studios,start_season,media_type';
@@ -507,20 +600,15 @@ async function generateRecs(){
 
     // Merge unique candidates
     var uniq = new Map();
-    results.forEach(function(src){
-      (src.data||[]).forEach(function(item){
-        var n = item.node || item;
-        uniq.set(n.id, n);
-      });
-    });
+    results.forEach(function(src){ (src.data||[]).forEach(function(item){ var n = item.node || item; uniq.set(n.id, n); }); });
 
     // Score + filter
     var scored = [];
     uniq.forEach(function(n){
       var id = n.id;
-      if(skip.has(id)) return;                 // user dismissed
+      if(skip.has(id)) return;                 // dismissed
       if(seenRecIds.has(id)) return;           // shown this session
-      if(excludeIdSet.has(id)) return;         // watching/completed/dropped (B)
+      if(excludeIdSet.has(id)) return;         // watching/completed/dropped
 
       var title = parseEnglishTitle(n);
       var genres = (n.genres||[]).map(function(g){ return g.name; });
@@ -544,12 +632,12 @@ async function generateRecs(){
     // Sort by score
     scored.sort(function(a,b){ return b.score - a.score; });
 
-    // A) 1 per franchise
+    // 1 per franchise
     var bestByKey = new Map();
     for(var k=0;k<scored.length;k++){ var r=scored[k]; if(!bestByKey.has(r.key)) bestByKey.set(r.key, r); }
     var deduped = Array.from(bestByKey.values());
 
-    // C) diversity: cap max 2 per studio and try to seed picks with top-3 studios
+    // diversity: cap max 2 per studio and seed with top-3 studios
     var studioCounts = new Map();
     function hasTopStudio(r){ for(var i=0;i<r.studios.length;i++) if(sTopSet.has(r.studios[i])) return true; return false; }
     function canTake(r){
@@ -563,7 +651,7 @@ async function generateRecs(){
     for(var f=0; f<favs.length && picks.length<3; f++){ if(canTake(favs[f])) take(favs[f], picks); }
     for(var m=0; m<deduped.length && picks.length<12; m++){ var r2=deduped[m]; if(picks.some(function(p){ return p.id===r2.id; })) continue; if(!canTake(r2)) continue; take(r2, picks); }
 
-    // B) PTW/On-Hold badges
+    // PTW/On-Hold badges
     function badgeHTML(id){
       if(ptwIdSet.has(id)) return ' <span class="pill">on your plan to watch</span>';
       if(onHoldIdSet.has(id)) return ' <span class="pill">on hold</span>';
@@ -613,8 +701,11 @@ $('#clearCacheBtn').onclick = function(){
 };
 $('#searchBox').addEventListener('input', renderTable);
 $('#minScore').addEventListener('change', renderTable);
-$('#genreBiasOn').addEventListener('change', function(){ saveLS('bias', getBias()); renderTable(); });
-$('#studioBiasOn').addEventListener('change', function(){ saveLS('bias', getBias()); renderTable(); });
+$('#advToggle').onclick = function(){
+  var p = $('#advPanel'); p.style.display = (p.style.display === 'none' || !p.style.display) ? 'block' : 'none';
+};
+$('#genreBiasOn').addEventListener('change', function(){ saveLS('bias', getBias()); });
+$('#studioBiasOn').addEventListener('change', function(){ saveLS('bias', getBias()); });
 $('#genreBiasW').addEventListener('change', function(){ saveLS('bias', getBias()); });
 $('#studioBiasW').addEventListener('change', function(){ saveLS('bias', getBias()); });
 $('#genRecsBtn').onclick = generateRecs;
@@ -623,13 +714,16 @@ $('#genRecsBtn').onclick = generateRecs;
 (function(){
   var savedBias = loadLS('bias', null);
   if(savedBias){
-    $('#genreBiasOn').checked = !!savedBias.gbOn;
-    $('#studioBiasOn').checked = !!savedBias.sbOn;
+    $('#genreBiasOn').checked = savedBias.gbOn !== false; // default ON
+    $('#studioBiasOn').checked = savedBias.sbOn !== false; // default ON
     if(typeof savedBias.gbW === 'number') $('#genreBiasW').value = savedBias.gbW;
     if(typeof savedBias.sbW === 'number') $('#studioBiasW').value = savedBias.sbW;
+  } else {
+    // Defaults
+    $('#genreBiasOn').checked = true; $('#studioBiasOn').checked = true;
+    $('#genreBiasW').value = 0.8; $('#studioBiasW').value = 0.8;
   }
 })();
 </script>
 </body>
 </html>
-
