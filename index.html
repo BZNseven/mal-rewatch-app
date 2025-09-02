@@ -59,6 +59,24 @@
     /* Rec rationale badges (only these get color changes) */
     .pill.badge-ptw { background:#0f2a44; border-color:#1b4fb6; color:#cfe3ff; }
     .pill.badge-onhold { background:#2a1144; border-color:#7c3aed; color:#eadcff; }
+    .pill.strength {
+      position: relative;
+      overflow: hidden; /* keep rounded shape */
+    }
+    .pill.strength::before {
+      content: "";
+      position: absolute;
+      inset: 0;                /* top:0; right:0; bottom:0; left:0 */
+      background: linear-gradient(
+        90deg,
+        rgba(74,163,255,0.18) 0%,
+        rgba(74,163,255,0.10) 100%
+    );
+  transform-origin: left center;
+  transform: scaleX(var(--f, 0)); /* --f is 0..1 set inline */
+  pointer-events: none;
+}
+    
     .right { text-align:right; }
     .small { font-size:12px; }
     .authed-only { display:none; }
@@ -166,6 +184,12 @@
             <div class="field"><span>weight</span><input type="number" id="genreBiasW" min="0" step="0.1" max="3" value="0.8"></div>
             <label class="field"><input type="checkbox" id="studioBiasOn" checked> Studio bias</label>
             <div class="field"><span>weight</span><input type="number" id="studioBiasW" min="0" step="0.1" max="3" value="0.8"></div>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <label class="field">
+              <input type="checkbox" id="snapshotValuesOn">
+              Show Snapshot values (totals & % of strongest)
+            </label>
           </div>
           <div class="row space">
             <button id="csvBtn" class="btn authed-only">Download CSV</button>
@@ -363,10 +387,18 @@ function renderTable(){
   var cs = loadLS('cacheStats', {hits:0,miss:0});
   $('#countsRow').textContent = 'Rows: '+shown+'/'+rewatchRows.length+'. Cached details: '+cs.hits+' hits, '+cs.miss+' misses.';
 }
-
+// Build a snapshot pill with a strength fill (0..1). Label is text-only by default.
+function strengthPill(label, fill){
+  var c = document.createElement('span');
+  c.className = 'pill strength';
+  var f = Math.max(0, Math.min(1, fill || 0));
+  c.style.setProperty('--f', String(f));
+  c.textContent = label;
+  return c;
+}
 /* ---------- Snapshot computations ---------- */
 function updateSnapshot(){
-  // Weighted by score (0 excluded)
+  // Accumulate weighted sums (score>0 only) and counts
   var gSum = new Map(), gCount = new Map();
   var sSum = new Map(), sCount = new Map();
   var comboSum = new Map(), comboCount = new Map();
@@ -375,7 +407,7 @@ function updateSnapshot(){
 
   rewatchRows.forEach(function(r){
     var w = r.myScore && r.myScore > 0 ? r.myScore : 0;
-    if(w === 0) return;
+    if(!w) return;
 
     // Genres
     r.genres.forEach(function(g){
@@ -399,40 +431,62 @@ function updateSnapshot(){
       }
     }
 
-    // Seasons / decades
+    // Seasons / decades by premiere
     if(r.season){ var S = seasonLabel(r.season); if(S) seasonSum.set(S, (seasonSum.get(S)||0) + w); }
     if(r.year){ var D = decadeOf(r.year); if(D) decadeSum.set(D, (decadeSum.get(D)||0) + w); }
   });
 
-  // Hybrid-sorted lists (display sums)
-  topGenres  = computeHybridTop(gSum,     gCount,     12).map(function(x){ return {name:x.name, weight:x.sum}; });
-  topStudios = computeHybridTop(sSum,     sCount,     12).map(function(x){ return {name:x.name, weight:x.sum}; });
-  var topCombos  = computeHybridTop(comboSum, comboCount, 5).map(function(x){ return {name:x.name, weight:x.sum}; });
+  // Hybrid sort for Genres / Studios / Combos (we display sums; sort by avg*sqrt(count))
+  var genresArr  = computeHybridTop(gSum,     gCount,     12); // [{name,sum,hybrid}]
+  var studiosArr = computeHybridTop(sSum,     sCount,     12);
+  var combosArr  = computeHybridTop(comboSum, comboCount,  5);
 
-  // Raw-sorted lists (display sums)
-  var topSeasons = topNFromMap(seasonSum, 4);
-  var topDecades = topNFromMap(decadeSum, 4);
+  // Raw totals for Seasons / Decades
+  var seasonsArr = topNFromMap(seasonSum, 4);  // [{name,sum}]
+  var decadesArr = topNFromMap(decadeSum, 4);
 
-  // Render chips
-  var tg = $('#topGenres'); tg.innerHTML = '';
-  topGenres.forEach(function(g){ tg.appendChild(chip(g.name+' · '+g.weight)); });
+  // Make best-of arrays available for other features (e.g., recommender highlights)
+  topGenres  = genresArr.map(function(x){ return {name:x.name, weight: Math.round(x.sum)}; });
+  topStudios = studiosArr.map(function(x){ return {name:x.name, weight: Math.round(x.sum)}; });
 
-  var tgc = $('#topGenreCombos'); tgc.innerHTML = '';
-  topCombos.forEach(function(c){ tgc.appendChild(chip(c.name+' · '+c.weight)); });
+  var showVals = ($('#snapshotValuesOn') && $('#snapshotValuesOn').checked) ? true : false;
 
-  var ts = $('#topStudios'); ts.innerHTML = '';
-  topStudios.forEach(function(s){ ts.appendChild(chip(s.name+' · '+s.weight)); });
+  // Render helper: fill snapshot chips for a section
+  function renderSection(el, arr, getFill, getSum){
+    el.innerHTML = '';
+    var maxFillBase = 0;
+    for (var i=0;i<arr.length;i++){
+      var base = getFill(arr[i]);
+      if (base > maxFillBase) maxFillBase = base;
+    }
+    if (maxFillBase <= 0) maxFillBase = 1; // guard
 
-  var tsea = $('#topSeasons'); tsea.innerHTML = '';
-  topSeasons.forEach(function(s){ tsea.appendChild(chip(s.name+' · '+Math.round(s.sum))); });
+    for (var j=0;j<arr.length;j++){
+      var item = arr[j];
+      var f = getFill(item) / maxFillBase;         // 0..1 normalized to strongest
+      var pct = Math.round(f * 100);
+      var label = item.name;
+      if (showVals){
+        var sum = Math.round(getSum(item));
+        label += ' · ' + sum + ' (' + pct + '%)';
+      }
+      el.appendChild(strengthPill(label, f));
+    }
+  }
 
-  var tdec = $('#topDecades'); tdec.innerHTML = '';
-  topDecades.forEach(function(d){ tdec.appendChild(chip(d.name+' · '+Math.round(d.sum))); });
+  // Sections
+  renderSection($('#topGenres'),       genresArr,  function(x){ return x.hybrid; }, function(x){ return x.sum; });
+  renderSection($('#topGenreCombos'),  combosArr,  function(x){ return x.hybrid; }, function(x){ return x.sum; });
+  renderSection($('#topStudios'),      studiosArr, function(x){ return x.hybrid; }, function(x){ return x.sum; });
+  renderSection($('#topSeasons'),      seasonsArr, function(x){ return x.sum;    }, function(x){ return x.sum; });
+  renderSection($('#topDecades'),      decadesArr, function(x){ return x.sum;    }, function(x){ return x.sum; });
 
-  // persist bias UI (Advanced panel)
-  var gbOn = $('#genreBiasOn').checked, sbOn = $('#studioBiasOn').checked;
-  var gbW = parseFloat($('#genreBiasW').value||'0'), sbW = parseFloat($('#studioBiasW').value||'0');
-  saveLS('bias', { gbOn:gbOn, sbOn:sbOn, gbW:gbW, sbW:sbW });
+  // persist bias UI (Advanced)
+  var gbOn = $('#genreBiasOn') && $('#genreBiasOn').checked;
+  var sbOn = $('#studioBiasOn') && $('#studioBiasOn').checked;
+  var gbW = $('#genreBiasW') ? parseFloat($('#genreBiasW').value||'0') : 0;
+  var sbW = $('#studioBiasW') ? parseFloat($('#studioBiasW').value||'0') : 0;
+  saveLS('bias', { gbOn:!!gbOn, sbOn:!!sbOn, gbW:gbW, sbW:sbW });
 }
 
 /* ---------- Load + Enrich ---------- */
@@ -761,6 +815,13 @@ $('#clearCacheBtn').onclick = function(){
 };
 $('#searchBox').addEventListener('input', renderTable);
 $('#minScore').addEventListener('change', renderTable);
+  var snapToggleEl = $('#snapshotValuesOn');
+if (snapToggleEl){
+  snapToggleEl.addEventListener('change', function(){
+    saveLS('snapshotVals', !!this.checked);
+    updateSnapshot();
+  });
+}
 function toggleAdv(){
   var p = $('#advPanel'); p.style.display = (p.style.display === 'none' || !p.style.display) ? 'block' : 'none';
   if(p.style.display === 'block') p.scrollIntoView({behavior:'smooth', block:'nearest'});
@@ -785,12 +846,11 @@ $('#genRecsBtn').onclick = generateRecs;
     $('#genreBiasOn').checked = true; $('#studioBiasOn').checked = true;
     $('#genreBiasW').value = 0.8; $('#studioBiasW').value = 0.8;
   }
+  var v = loadLS('snapshotVals', null);
+  if (v !== null && $('#snapshotValuesOn')) {
+    $('#snapshotValuesOn').checked = !!v;
+  }
 })();
 </script>
 </body>
 </html>
-
-
-
-
-
