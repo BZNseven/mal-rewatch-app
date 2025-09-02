@@ -581,13 +581,16 @@ async function generateRecs(){
 
   try{
     await loadAllMyListIds(); // refresh exclude + PTW/On-Hold sets
+
+    // Build favorite signal sets
     var gTopSet = new Set(topGenres.map(function(x){ return x.name; }));
     var sTopArr = topStudios.slice(0,3).map(function(x){ return x.name; });
     var sTopSet = new Set(sTopArr);
+
     var bias = getBias();
     var skip = getSkipRecs();
 
-    // rotate offsets to vary results per click
+    // Rotate offsets to vary results per click
     var offA = (recsSeed % 3) * 100;
     var offB = ((recsSeed + 1) % 3) * 100;
     var fields = 'id,title,alternative_titles,mean,genres,studios,start_season,media_type';
@@ -601,7 +604,12 @@ async function generateRecs(){
 
     // Merge unique candidates
     var uniq = new Map();
-    results.forEach(function(src){ (src.data||[]).forEach(function(item){ var n = item.node || item; uniq.set(n.id, n); }); });
+    results.forEach(function(src){
+      (src.data||[]).forEach(function(item){
+        var n = item.node || item;
+        uniq.set(n.id, n);
+      });
+    });
 
     // Score + filter
     var scored = [];
@@ -638,7 +646,7 @@ async function generateRecs(){
     for(var k=0;k<scored.length;k++){ var r=scored[k]; if(!bestByKey.has(r.key)) bestByKey.set(r.key, r); }
     var deduped = Array.from(bestByKey.values());
 
-    // diversity: cap max 2 per studio and seed with top-3 studios
+    // Diversity: cap max 2 per studio and seed with top-3 studios
     var studioCounts = new Map();
     function hasTopStudio(r){ for(var i=0;i<r.studios.length;i++) if(sTopSet.has(r.studios[i])) return true; return false; }
     function canTake(r){
@@ -650,7 +658,12 @@ async function generateRecs(){
     var picks = [];
     var favs = deduped.filter(hasTopStudio);
     for(var f=0; f<favs.length && picks.length<3; f++){ if(canTake(favs[f])) take(favs[f], picks); }
-    for(var m=0; m<deduped.length && picks.length<12; m++){ var r2=deduped[m]; if(picks.some(function(p){ return p.id===r2.id; })) continue; if(!canTake(r2)) continue; take(r2, picks); }
+    for(var m=0; m<deduped.length && picks.length<12; m++){
+      var r2=deduped[m];
+      if(picks.some(function(p){ return p.id===r2.id; })) continue;
+      if(!canTake(r2)) continue;
+      take(r2, picks);
+    }
 
     // PTW/On-Hold badges
     function badgeHTML(id){
@@ -659,18 +672,11 @@ async function generateRecs(){
       return '';
     }
 
-    // Render
-    var recsEl = $('#recs'); recsEl.innerHTML = '';
-    picks.forEach(function(r){
-      var gHits = (r.genres||[]).filter(function(g){ return gTopGenresSet.has(g); });
-    });
-
-    // (Fix: build gTopGenresSet from topGenres)
-    var gTopGenresSet = new Set(topGenres.map(function(x){ return x.name; }));
+    // Render (use gTopSet / sTopSet already defined)
+    var recsEl = $('#recs');
     recsEl.innerHTML = '';
     picks.forEach(function(r){
-      var gHits = (r.genres||[]).filter(function(g){ return gTopGenresSet.has(g); }).slice(0,3);
-      var sTopSet = new Set(topStudios.slice(0,3).map(function(x){ return x.name; }));
+      var gHits = (r.genres||[]).filter(function(g){ return gTopSet.has(g); }).slice(0,3);
       var sHits = (r.studios||[]).filter(function(s){ return sTopSet.has(s); }).slice(0,2);
       var parts = [];
       if(gHits.length) parts.push('shares top genres: '+gHits.join(', '));
@@ -693,7 +699,9 @@ async function generateRecs(){
     picks.forEach(function(p){ seenRecIds.add(p.id); });
     saveSeen(); bumpRecsSeed();
 
-    if(picks.length===0) $('#recs').innerHTML = '<div class="small muted">No matches found from the current pools. Click again for a fresh mix.</div>';
+    if(picks.length===0){
+      $('#recs').innerHTML = '<div class="small muted">No matches found from the current pools. Click again for a fresh mix.</div>';
+    }
   }catch(err){
     $('#recs').innerHTML = '<div class="small error">Failed to generate recommendations: '+err.message+'</div>';
   }
@@ -738,3 +746,4 @@ $('#genRecsBtn').onclick = generateRecs;
 </script>
 </body>
 </html>
+
