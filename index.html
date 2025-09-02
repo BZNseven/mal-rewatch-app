@@ -340,7 +340,7 @@ async function loadAllMyListIds(){
   const out = new Set();
   let next = 0;
   while(true){
-    const data = await API.animelist({ limit: 100, offset: next, status: 'all', fields: 'list_status' });
+    const data = await API.animelist({ limit: 100, offset: next, fields: 'list_status' });
     for(const it of (data.data||[])){
       out.add(it.node.id);
     }
@@ -363,12 +363,7 @@ async function handleLoad(){
   const completedOnly = $('#completedOnly').checked;
 
   while(true){
-    const data = await API.animelist({
-  limit: 100,
-  offset: next,
-  status: 'all', // include every status
-  fields: 'list_status{status,score,tags}',
-});
+    const data = await API.animelist({ limit: 100, offset: next, fields: 'list_status{status,score,tags}' });
     const batch = (data.data||[]);
     items.push(...batch);
     if(!data.paging || !data.paging.next) break;
@@ -616,4 +611,5 @@ if(savedBias){
 </script>
 </body>
 </html>
+
 
