@@ -11,22 +11,19 @@
       --text: #e6e6ea;
       --muted: #a0a4ac;
       --accent: #4aa3ff;
-      --accent-2: #8b5cf6;
       --good: #3ecf8e;
       --warn: #f59e0b;
-      --bad: #ef4444;
+      --border: #262a35;
       --chip: #222735;
       --highlight: rgba(74,163,255,0.12);
-      --border: #262a35;
     }
-    html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font: 14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+    a { color: var(--accent); text-decoration: none; } a:hover{ text-decoration: underline; }
     .wrap { max-width: 1200px; margin: 24px auto 80px; padding: 0 16px; }
-    header { display:flex; align-items:center; gap:12px; justify-content: space-between; margin-bottom: 12px; }
+    header { display:flex; align-items:center; gap:12px; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; }
     .btn { background: var(--panel); border:1px solid var(--border); color:var(--text); padding:8px 12px; border-radius:8px; cursor:pointer; }
     .btn:disabled { opacity: .6; cursor:not-allowed; }
-    .btn.primary { background: linear-gradient(180deg, #2b6cdf, #1f5bd1); border-color: #1b4fb6; }
+    .btn.primary { background: linear-gradient(180deg, #2b6cdf, #1f5bd1); border-color:#1b4fb6; }
     .btn.ghost { background: transparent; border-color: var(--border); }
     .btn.warn { background: #2a1c0b; border-color:#3b2b11; color:#fbbf24; }
     .controls { display:flex; flex-wrap: wrap; gap:8px; align-items:center; }
@@ -36,17 +33,14 @@
     .chips { display:flex; gap:6px; flex-wrap: wrap; }
     .chip { background: var(--chip); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); }
     hr.sep { border:none; border-top:1px solid var(--border); margin:16px 0; }
-    /* Progress */
     .progress { background:#141822; border:1px solid var(--border); border-radius:10px; overflow:hidden; height:14px; position:relative; }
     .bar { background: linear-gradient(90deg, var(--accent), var(--good)); width:0%; height:100%; transition: width .2s; }
     .progress-row { display:grid; grid-template-columns: 1fr auto; gap:12px; align-items:center; }
-    /* Table */
     table { width:100%; border-collapse: collapse; }
     th, td { padding:10px 8px; border-bottom:1px solid var(--border); vertical-align: top; }
     thead th { text-align:left; font-weight:600; color:#cfd3dc; position: sticky; top: 0; background: var(--bg); }
     tbody tr:hover { background: #141821; }
     tr.highlight { background: var(--highlight); }
-    /* Snapshot + recs */
     .grid { display:grid; gap:12px; }
     @media(min-width:900px){ .grid.cols-2 { grid-template-columns: 1fr 1fr; } }
     .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px; }
@@ -60,8 +54,8 @@
     .pill { font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#1a1f2b; color:#bfc5d3; }
     .right { text-align:right; }
     .small { font-size: 12px; }
-    /* Hide when not logged */
     .authed-only { display:none; }
+    .error { color:#ff6b6b; }
   </style>
 </head>
 <body>
@@ -147,7 +141,7 @@
 
     <section class="card">
       <h3>Rewatch List</h3>
-      <div class="note small">Matching tag exactly <strong>Rewatch</strong> after splitting comma tags. English title preferred when available. Score 0 is shown as “—”.</div>
+      <div class="note small">Matches tag <strong>Rewatch</strong> exactly after splitting comma tags. English title preferred. Score 0 shows as “—”.</div>
       <div style="overflow:auto; margin-top:8px;">
         <table id="table">
           <thead>
@@ -168,65 +162,68 @@
     </section>
 
     <p class="note small" style="margin-top:12px;">
-      Settings save locally and persist for 90 days. NSFW visibility is on via the proxy.
+      Settings save locally for 90 days. NSFW visibility is on via the proxy.
     </p>
   </div>
 
 <script>
-/* ---------- Util ---------- */
-const $ = sel => document.querySelector(sel);
-const $$ = sel => Array.from(document.querySelectorAll(sel));
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const MAL_LINK = id => `https://myanimelist.net/anime/${id}`;
+/* ---------- Helpers ---------- */
+function $(s){ return document.querySelector(s); }
+function $$(s){ return Array.from(document.querySelectorAll(s)); }
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+function MAL_LINK(id){ return 'https://myanimelist.net/anime/' + id; }
 
 function getCookie(name){
-  const m = document.cookie.match(new RegExp('(^| )'+name+'=([^;]+)'));
+  var m = document.cookie.match(new RegExp('(^| )'+name+'=([^;]+)'));
   return m ? decodeURIComponent(m[2]) : null;
 }
-
-function saveLS(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
-function loadLS(key, def=null){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch(e){ return def; } }
+function saveLS(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+function loadLS(k, d){ try{ var v = localStorage.getItem(k); return v ? JSON.parse(v) : (d===undefined?null:d); }catch(e){ return d===undefined?null:d; } }
 
 function setProgress(done, total, label){
-  const pct = total ? Math.floor(done/total*100) : 0;
+  var pct = total ? Math.floor(done/total*100) : 0;
   $('#bar').style.width = pct + '%';
-  $('#progressText').textContent = `${pct}%`;
-  if(label){ $('#countsRow').textContent = label; }
+  $('#progressText').textContent = pct + '%';
+  if(label) $('#countsRow').textContent = label;
 }
 
-/* ---------- API Proxy helpers ---------- */
-const API = {
-  async animelist(params){
-    const qs = new URLSearchParams(params);
-    const res = await fetch(`/api/animelist?${qs.toString()}`, { credentials:'include' });
-    if(!res.ok) throw new Error(`animelist ${res.status}`);
+/* ---------- API via Netlify proxy ---------- */
+var API = {
+  animelist: async function(params){
+    var qs = new URLSearchParams(params);
+    var res = await fetch('/api/animelist?' + qs.toString(), { credentials:'include' });
+    if(!res.ok) throw new Error('animelist ' + res.status);
     return res.json();
   },
-  async animeDetails(id, fields){
-    const qs = new URLSearchParams({ fields });
-    const res = await fetch(`/api/anime/${id}?${qs.toString()}`, { credentials:'include' });
-    if(!res.ok) throw new Error(`anime ${id} ${res.status}`);
+  animeDetails: async function(id, fields){
+    var qs = new URLSearchParams({ fields: fields });
+    var res = await fetch('/api/anime/' + id + '?' + qs.toString(), { credentials:'include' });
+    if(!res.ok) throw new Error('anime ' + id + ' ' + res.status);
     return res.json();
   },
-  async animeRanking(ranking_type, limit=100, offset=0, fields='id,title,alternative_titles,mean,genres,studios,start_season,media_type'){
-    const qs = new URLSearchParams({ ranking_type, limit, offset, fields });
-    const res = await fetch(`/api/anime-ranking?${qs.toString()}`, { credentials:'include' });
-    if(!res.ok) throw new Error(`ranking ${ranking_type} ${res.status}`);
+  animeRanking: async function(ranking_type, limit, offset, fields){
+    var qs = new URLSearchParams({
+      ranking_type: ranking_type || 'bypopularity',
+      limit: String(limit || 100),
+      offset: String(offset || 0),
+      fields: fields || 'id,title,alternative_titles,mean,genres,studios,start_season,media_type'
+    });
+    var res = await fetch('/api/anime-ranking?' + qs.toString(), { credentials:'include' });
+    if(!res.ok) throw new Error('ranking ' + ranking_type + ' ' + res.status);
     return res.json();
   }
 };
 
-/* ---------- State ---------- */
-let allList = [];          // full @me animelist (minimal)
-let rewatchRows = [];      // filtered + enriched rows
-let topGenres = [];        // [{name, weight}]
-let topStudios = [];       // [{name, weight}]
-let excludeIdSet = new Set();
+/* ---------- State & cache ---------- */
+var allList = [];
+var rewatchRows = [];
+var topGenres = [];
+var topStudios = [];
+var excludeIdSet = new Set();
 
-const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
-
+var CACHE_TTL_MS = 90*24*60*60*1000;
 function cacheGet(key){
-  const raw = loadLS('cache:'+key, null);
+  var raw = loadLS('cache:'+key, null);
   if(!raw) return null;
   if(Date.now() - raw.t > CACHE_TTL_MS) return null;
   return raw.v;
@@ -237,115 +234,114 @@ function cacheSet(key, val){
 
 /* ---------- Auth UI ---------- */
 function reflectAuth(){
-  const has = !!getCookie('mal_access');
-  $$('.authed-only').forEach(el => { el.style.display = has ? '' : 'none'; });
+  var has = !!getCookie('mal_access');
+  $$('.authed-only').forEach(function(el){ el.style.display = has ? '' : 'none'; });
 }
-$('#loginBtn').onclick = () => { window.location.href = '/.netlify/functions/auth-start'; };
-$('#logoutBtn').onclick = () => { document.cookie = 'mal_access=; Max-Age=0; path=/'; document.cookie='mal_refresh=; Max-Age=0; path=/'; location.reload(); };
+$('#loginBtn').onclick = function(){ window.location.href = '/.netlify/functions/auth-start'; };
+$('#logoutBtn').onclick = function(){ document.cookie='mal_access=; Max-Age=0; path=/'; document.cookie='mal_refresh=; Max-Age=0; path=/'; location.reload(); };
 reflectAuth();
 
-/* ---------- Load + Enrich ---------- */
+/* ---------- Table + snapshot ---------- */
 function parseEnglishTitle(node){
-  const en = node.alternative_titles && node.alternative_titles.en;
+  var en = node.alternative_titles && node.alternative_titles.en;
   return en && en.trim().length ? en : node.title;
 }
 
 function commaTagsInclude(tags, needle){
   if (!tags || !needle) return false;
-  const want = String(needle).trim().toLowerCase();
-
-  // If MAL returns an array of tag strings
+  var want = String(needle).trim().toLowerCase();
   if (Array.isArray(tags)) {
-    return tags.some(t => String(t).trim().toLowerCase() === want);
+    return tags.some(function(t){ return String(t).trim().toLowerCase() === want; });
   }
-
-  // If MAL returns a comma-separated string
-  return String(tags)
-    .split(',')
-    .map(s => s.trim().toLowerCase())
+  return String(tags).split(',')
+    .map(function(s){ return s.trim().toLowerCase(); })
     .filter(Boolean)
-    .some(p => p === want);
+    .some(function(p){ return p === want; });
 }
 
 function fmtScore(s){ return s && s > 0 ? String(s) : '—'; }
 
-function renderTable(){
-  const q = ($('#searchBox').value || '').toLowerCase();
-  const min = parseInt($('#minScore').value || '0', 10);
-  const tbody = $('#tbody');
-  tbody.innerHTML = '';
-  let shown = 0;
-
-  const topGset = new Set(topGenres.map(g=>g.name));
-  const topSset = new Set(topStudios.map(s=>s.name));
-
-  for(const r of rewatchRows){
-    if(q && !r.title.toLowerCase().includes(q)) continue;
-    if(min && (r.myScore || 0) < min) continue;
-
-    const tr = document.createElement('tr');
-    const hasSig = r.genres.some(g=>topGset.has(g)) || r.studios.some(s=>topSset.has(s));
-    if(hasSig) tr.classList.add('highlight');
-
-    tr.innerHTML = `
-      <td>${r.title}</td>
-      <td>${fmtScore(r.myScore)}</td>
-      <td>${r.genres.slice(0,3).join(', ')}</td>
-      <td>${r.year || ''}</td>
-      <td>${r.type || ''}</td>
-      <td>${r.episodes || ''}</td>
-      <td>${r.studios.slice(0,2).join(', ')}</td>
-      <td><a href="${MAL_LINK(r.id)}" target="_blank" rel="noopener">MAL</a></td>
-    `;
-    tbody.appendChild(tr);
-    shown++;
-  }
-  $('#countsRow').textContent = `Rows: ${shown}/${rewatchRows.length}. Cached details: ${loadLS('cacheStats', {hits:0,miss:0}).hits} hits, ${loadLS('cacheStats', {hits:0,miss:0}).miss} misses.`;
-}
-
-function updateSnapshot(){
-  // weights by score; 0 omits weight
-  const gCounts = new Map();
-  const sCounts = new Map();
-  for(const r of rewatchRows){
-    const w = r.myScore && r.myScore > 0 ? r.myScore : 0;
-    if(w === 0) continue;
-    r.genres.forEach(g => gCounts.set(g, (gCounts.get(g)||0)+w));
-    r.studios.forEach(s => sCounts.set(s, (sCounts.get(s)||0)+w));
-  }
-  const toArr = (m) => Array.from(m.entries()).map(([name, w])=>({name, weight:Math.round(w)})).sort((a,b)=>b.weight - a.weight).slice(0,12);
-  topGenres = toArr(gCounts);
-  topStudios = toArr(sCounts);
-
-  const tg = $('#topGenres'); tg.innerHTML = '';
-  topGenres.forEach(g => tg.appendChild(chip(`${g.name} · ${g.weight}`)));
-  const ts = $('#topStudios'); ts.innerHTML = '';
-  topStudios.forEach(s => ts.appendChild(chip(`${s.name} · ${s.weight}`)));
-
-  // persist bias UI
-  const gbOn = $('#genreBiasOn').checked, sbOn = $('#studioBiasOn').checked;
-  const gbW = parseFloat($('#genreBiasW').value||'0'), sbW = parseFloat($('#studioBiasW').value||'0');
-  saveLS('bias', { gbOn, sbOn, gbW, sbW });
-}
-
 function chip(text){
-  const c = document.createElement('span');
+  var c = document.createElement('span');
   c.className='chip';
   c.textContent = text;
   return c;
 }
 
+function renderTable(){
+  var q = ($('#searchBox').value || '').toLowerCase();
+  var min = parseInt($('#minScore').value || '0', 10);
+  var tbody = $('#tbody');
+  tbody.innerHTML = '';
+  var shown = 0;
+
+  var topGset = new Set(topGenres.map(function(g){ return g.name; }));
+  var topSset = new Set(topStudios.map(function(s){ return s.name; }));
+
+  rewatchRows.forEach(function(r){
+    if(q && r.title.toLowerCase().indexOf(q) === -1) return;
+    if(min && (r.myScore || 0) < min) return;
+
+    var tr = document.createElement('tr');
+    var hasSig = r.genres.some(function(g){ return topGset.has(g); }) || r.studios.some(function(s){ return topSset.has(s); });
+    if(hasSig) tr.classList.add('highlight');
+
+    tr.innerHTML =
+      '<td>'+r.title+'</td>'+
+      '<td>'+fmtScore(r.myScore)+'</td>'+
+      '<td>'+r.genres.slice(0,3).join(', ')+'</td>'+
+      '<td>'+(r.year||'')+'</td>'+
+      '<td>'+(r.type||'')+'</td>'+
+      '<td>'+(r.episodes||'')+'</td>'+
+      '<td>'+r.studios.slice(0,2).join(', ')+'</td>'+
+      '<td><a href="'+MAL_LINK(r.id)+'" target="_blank" rel="noopener">MAL</a></td>';
+
+    tbody.appendChild(tr);
+    shown++;
+  });
+
+  var cs = loadLS('cacheStats', {hits:0,miss:0});
+  $('#countsRow').textContent = 'Rows: '+shown+'/'+rewatchRows.length+'. Cached details: '+cs.hits+' hits, '+cs.miss+' misses.';
+}
+
+function updateSnapshot(){
+  var gCounts = new Map();
+  var sCounts = new Map();
+  rewatchRows.forEach(function(r){
+    var w = r.myScore && r.myScore > 0 ? r.myScore : 0;
+    if(w === 0) return;
+    r.genres.forEach(function(g){ gCounts.set(g, (gCounts.get(g)||0) + w); });
+    r.studios.forEach(function(s){ sCounts.set(s, (sCounts.get(s)||0) + w); });
+  });
+  function toArr(m){
+    return Array.from(m.entries())
+      .map(function(e){ return {name:e[0], weight:Math.round(e[1])}; })
+      .sort(function(a,b){ return b.weight - a.weight; })
+      .slice(0,12);
+  }
+  topGenres = toArr(gCounts);
+  topStudios = toArr(sCounts);
+
+  var tg = $('#topGenres'); tg.innerHTML = '';
+  topGenres.forEach(function(g){ tg.appendChild(chip(g.name+' · '+g.weight)); });
+  var ts = $('#topStudios'); ts.innerHTML = '';
+  topStudios.forEach(function(s){ ts.appendChild(chip(s.name+' · '+s.weight)); });
+
+  // persist bias UI
+  var gbOn = $('#genreBiasOn').checked, sbOn = $('#studioBiasOn').checked;
+  var gbW = parseFloat($('#genreBiasW').value||'0'), sbW = parseFloat($('#studioBiasW').value||'0');
+  saveLS('bias', { gbOn:gbOn, sbOn:sbOn, gbW:gbW, sbW:sbW });
+}
+
+/* ---------- Load + Enrich ---------- */
 async function loadAllMyListIds(){
-  // minimal fetch to exclude all user statuses
-  const out = new Set();
-  let next = 0;
+  var out = new Set();
+  var next = 0;
   while(true){
-    const data = await API.animelist({ limit: 100, offset: next, fields: 'list_status' });
-    for(const it of (data.data||[])){
-      out.add(it.node.id);
-    }
+    var data = await API.animelist({ limit: 100, offset: next, fields: 'list_status' });
+    (data.data||[]).forEach(function(it){ out.add(it.node.id); });
     if(!data.paging || !data.paging.next) break;
-    const u = new URL(data.paging.next);
+    var u = new URL(data.paging.next);
     next = parseInt(u.searchParams.get('offset')||'0',10);
     await sleep(120);
   }
@@ -356,160 +352,138 @@ async function handleLoad(){
   reflectAuth();
   setProgress(0, 1, 'Fetching your list…');
 
-  // pull animelist
-  let items = [];
-  let total = 0, done = 0, next = 0;
-  const tag = ($('#tagInput').value||'Rewatch').trim();
-  const completedOnly = $('#completedOnly').checked;
+  try {
+    // fetch all pages minimally
+    var items = [];
+    var next = 0;
+    while(true){
+      var data = await API.animelist({
+        limit: 100,
+        offset: next,
+        fields: 'list_status{status,score,tags}'
+      });
+      items = items.concat(data.data||[]);
+      if(!data.paging || !data.paging.next) break;
+      var u = new URL(data.paging.next);
+      next = parseInt(u.searchParams.get('offset')||'0',10);
+    }
+    allList = items;
 
-  while(true){
-    const data = await API.animelist({ limit: 100, offset: next, fields: 'list_status{status,score,tags}' });
-    const batch = (data.data||[]);
-    items.push(...batch);
-    if(!data.paging || !data.paging.next) break;
-    const u = new URL(data.paging.next);
-    next = parseInt(u.searchParams.get('offset')||'0',10);
-  }
+    // filter by exact tag "Rewatch" after splitting, optional completed-only
+    var tag = ($('#tagInput').value||'Rewatch').trim();
+    var completedOnly = $('#completedOnly').checked;
 
-  // keep full list ids for rec exclusion
-  allList = items;
+    var filtered = items.filter(function(it){
+      var ls = it.list_status || (it.node && (it.node.my_list_status || it.node.list_status)) || {};
+      var tags = ls && (ls.tags || '');
+      var hasTag = commaTagsInclude(tags, tag);
+      var statusOk = !completedOnly || (ls && ls.status === 'completed');
+      return hasTag && statusOk;
+    });
 
-  // filter for exact tag "Rewatch" after splitting comma tags
-  ChatGPT said:
+    var total = filtered.length;
+    setProgress(0, total, 'Found '+total+' Rewatch entries. Enriching…');
 
-You’re right — searching with a dot at the end likely missed it. Let’s fix this cleanly with two tiny, exact replacements in index.html.
+    // Enrich details with polite concurrency + cache
+    var cacheStats = loadLS('cacheStats', {hits:0,miss:0});
+    var out = [];
+    var fields = 'alternative_titles,genres,studios,start_season,num_episodes,media_type';
+    var queue = filtered.slice();
+    var done = 0;
+    var concurrency = 6;
 
-We’ll change where we read list_status in:
-
-the filter step (decides which rows are “Rewatch”), and
-
-the enrichment step (reads your score for each row).
-
-Both should read from it.list_status first, not it.node.list_status.
-
-Patch 1 — Filter uses it.list_status
-
-What to search: const filtered = items.filter(it => {
-
-Open index.html → edit.
-
-Press Ctrl+F and search for:
-
-const filtered = items.filter(it => {
-
-
-Replace that whole filter block with this:
-
-const filtered = items.filter(it => {
-  // MAL returns list_status at the top level for each item
-  const ls = it.list_status || it.node.my_list_status || {};
-  const tags = ls && (ls.tags || '');
-  const hasTag = commaTagsInclude(tags, tag); // exact “Rewatch” match, case-insensitive
-  const statusOk = !completedOnly || (ls && ls.status === 'completed');
-  return hasTag && statusOk;
-});
-
-  total = filtered.length;
-  setProgress(0, total, `Found ${total} Rewatch entries. Enriching…`);
-
-  // Enrich with details (polite concurrency + cache)
-  const cacheStats = loadLS('cacheStats', {hits:0,miss:0});
-  const out = [];
-  const fields = 'alternative_titles,genres,studios,start_season,num_episodes,media_type';
-  const queue = [...filtered];
-  const concurrency = 6;
-  let active = 0;
-
-  async function worker(){
-    while(queue.length){
-      const it = queue.shift();
-      const id = it.node.id;
-      const ls = it.node.list_status || it.node.my_list_status || {};
-      let det = cacheGet('anime:'+id);
-      if(det){ cacheStats.hits++; }
-      if(!det){
-        // retry wrapper
-        let attempts = 0;
-        while(true){
-          try{
-            det = await API.animeDetails(id, fields);
-            cacheSet('anime:'+id, det);
-            cacheStats.miss++;
-            break;
-          }catch(err){
-            attempts++;
-            if(attempts >= 3) throw err;
-            await sleep(500 * attempts);
+    async function worker(){
+      while(queue.length){
+        var it = queue.shift();
+        var id = it.node.id;
+        var det = cacheGet('anime:'+id);
+        if(det){ cacheStats.hits++; }
+        if(!det){
+          var attempts = 0;
+          while(true){
+            try{
+              det = await API.animeDetails(id, fields);
+              cacheSet('anime:'+id, det);
+              cacheStats.miss++;
+              break;
+            }catch(err){
+              attempts++;
+              if(attempts >= 3) throw err;
+              await sleep(500 * attempts);
+            }
           }
         }
+        var ls = it.list_status || (it.node && (it.node.my_list_status || it.node.list_status)) || {};
+        var title = parseEnglishTitle(det);
+        var genres = (det.genres||[]).map(function(g){ return g.name; });
+        var studios = (det.studios||[]).map(function(s){ return s.name; });
+        var start = det.start_season && det.start_season.year;
+
+        out.push({
+          id: id,
+          title: title,
+          genres: genres,
+          studios: studios,
+          year: start || '',
+          type: det.media_type || '',
+          episodes: det.num_episodes || '',
+          myScore: ls.score || 0
+        });
+
+        done++;
+        setProgress(done, total, 'Enriched '+done+'/'+total);
       }
-      const ls = it.list_status || it.node?.my_list_status || it.node?.list_status || {};
-      const title = parseEnglishTitle(det);
-      const genres = (det.genres||[]).map(g=>g.name);
-      const studios = (det.studios||[]).map(s=>s.name);
-      const start = det.start_season && det.start_season.year;
-      out.push({
-        id,
-        title,
-        genres,
-        studios,
-        year: start || '',
-        type: det.media_type || '',
-        episodes: det.num_episodes || '',
-        myScore: ls.score || 0
-      });
-      done++;
-      setProgress(done, total, `Enriched ${done}/${total}`);
     }
+
+    var nWorkers = Math.min(concurrency, queue.length);
+    await Promise.all(Array.from({length:nWorkers}).map(function(){ return worker(); }));
+    saveLS('cacheStats', cacheStats);
+
+    rewatchRows = out.sort(function(a,b){ return a.title.localeCompare(b.title); });
+    updateSnapshot();
+    renderTable();
+  } catch (err){
+    $('#countsRow').innerHTML = '<span class="error">Error: '+err.message+'</span>';
   }
-
-  const workers = Array.from({length:Math.min(concurrency, queue.length)}, worker);
-  await Promise.all(workers);
-  saveLS('cacheStats', cacheStats);
-
-  // sort alpha by title
-  rewatchRows = out.sort((a,b)=>a.title.localeCompare(b.title));
-
-  updateSnapshot();
-  renderTable();
 }
 
 /* ---------- Exports ---------- */
 function toCSV(rows){
-  const head = ['Title','My Score','Genres','Year','Type','Ep','Studios','Link'];
-  const lines = [head.join(',')];
-  for(const r of rows){
-    const cols = [
-      `"${r.title.replace(/"/g,'""')}"`,
+  var head = ['Title','My Score','Genres','Year','Type','Ep','Studios','Link'];
+  var lines = [head.join(',')];
+  rows.forEach(function(r){
+    var cols = [
+      '"' + r.title.replace(/"/g,'""') + '"',
       fmtScore(r.myScore),
-      `"${r.genres.slice(0,3).join(' / ').replace(/"/g,'""')}"`,
+      '"' + r.genres.slice(0,3).join(' / ').replace(/"/g,'""') + '"',
       r.year||'',
       r.type||'',
       r.episodes||'',
-      `"${r.studios.slice(0,2).join(' / ').replace(/"/g,'""')}"`,
+      '"' + r.studios.slice(0,2).join(' / ').replace(/"/g,'""') + '"',
       MAL_LINK(r.id)
     ];
     lines.push(cols.join(','));
-  }
+  });
   return lines.join('\n');
 }
 function toMarkdown(rows){
-  const head = '| Title | My Score | Genres | Year | Type | Ep | Studios |\n|---|---:|---|---:|---|---:|---|\n';
-  const body = rows.map(r => `| [${r.title}](${MAL_LINK(r.id)}) | ${fmtScore(r.myScore)} | ${r.genres.slice(0,3).join(' / ')} | ${r.year||''} | ${r.type||''} | ${r.episodes||''} | ${r.studios.slice(0,2).join(' / ')} |`).join('\n');
+  var head = '| Title | My Score | Genres | Year | Type | Ep | Studios |\n|---|---:|---|---:|---|---:|---|\n';
+  var body = rows.map(function(r){
+    return '| ['+r.title+']('+MAL_LINK(r.id)+') | '+fmtScore(r.myScore)+' | '+r.genres.slice(0,3).join(' / ')+' | '+(r.year||'')+' | '+(r.type||'')+' | '+(r.episodes||'')+' | '+r.studios.slice(0,2).join(' / ')+' |';
+  }).join('\n');
   return head + body + '\n';
 }
-function download(name, text, type='text/plain'){
-  const blob = new Blob([text], {type});
-  const url = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement('a'), { href:url, download:name });
+function download(name, text, type){
+  var blob = new Blob([text], {type: type || 'text/plain'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url; a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
 
-/* ---------- Recommender ---------- */
+/* ---------- Recommender (Phase 1) ---------- */
 function getBias(){
-  const b = loadLS('bias', null) || {};
-  // sync from UI as source of truth
+  var b = loadLS('bias', {}) || {};
   b.gbOn = $('#genreBiasOn').checked;
   b.sbOn = $('#studioBiasOn').checked;
   b.gbW = parseFloat($('#genreBiasW').value||'0');
@@ -517,127 +491,120 @@ function getBias(){
   saveLS('bias', b);
   return b;
 }
-
 function overlapCount(setA, arrB){
-  let c=0;
-  for(const x of arrB) if(setA.has(x)) c++;
+  var c=0, i;
+  for(i=0;i<arrB.length;i++) if(setA.has(arrB[i])) c++;
   return c;
 }
-
 function rationaleText(rec, gTopSet, sTopSet){
-  const gHits = (rec.genres||[]).filter(g=>gTopSet.has(g)).slice(0,3);
-  const sHits = (rec.studios||[]).filter(s=>sTopSet.has(s)).slice(0,2);
-  const parts = [];
-  if(gHits.length) parts.push(`shares top genres: ${gHits.join(', ')}`);
-  if(sHits.length) parts.push(`from favorite studio${sHits.length>1?'s':''}: ${sHits.join(', ')}`);
+  var gHits = (rec.genres||[]).filter(function(g){ return gTopSet.has(g); }).slice(0,3);
+  var sHits = (rec.studios||[]).filter(function(s){ return sTopSet.has(s); }).slice(0,2);
+  var parts = [];
+  if(gHits.length) parts.push('shares top genres: '+gHits.join(', '));
+  if(sHits.length) parts.push('from favorite studio'+(sHits.length>1?'s':'')+': '+sHits.join(', '));
   if(!parts.length) parts.push('tonal neighbor to your favorites');
   return parts.join(' · ');
 }
-
+async function loadAllMyListIdsOnce(){
+  if(excludeIdSet && excludeIdSet.size > 0) return;
+  await loadAllMyListIds();
+}
 async function generateRecs(){
-  if(!rewatchRows.length){
-    alert('Load your Rewatch list first.');
-    return;
-  }
+  if(!rewatchRows.length){ alert('Load your Rewatch list first.'); return; }
   $('#recs').innerHTML = '<div class="note small">Finding candidates…</div>';
 
-  if(excludeIdSet.size === 0) await loadAllMyListIds();
+  try{
+    await loadAllMyListIdsOnce();
+    var gTopSet = new Set(topGenres.map(function(x){ return x.name; }));
+    var sTopSet = new Set(topStudios.map(function(x){ return x.name; }));
+    var bias = getBias();
 
-  const gTopSet = new Set(topGenres.map(x=>x.name));
-  const sTopSet = new Set(topStudios.map(x=>x.name));
-  const bias = getBias();
+    var fields = 'id,title,alternative_titles,mean,genres,studios,start_season,media_type';
+    var results = await Promise.all([
+      API.animeRanking('bypopularity', 100, 0, fields),
+      API.animeRanking('all', 100, 0, fields)
+    ]);
 
-  // Fetch two ranking pools and merge
-  let candidates = [];
-  const fields = 'id,title,alternative_titles,mean,genres,studios,start_season,media_type';
-  const pools = [
-    API.animeRanking('bypopularity', 100, 0, fields),
-    API.animeRanking('all', 100, 0, fields),
-  ];
-  const [pop, all] = await Promise.all(pools);
-  const uniq = new Map();
-  for(const src of [pop, all]){
-    for(const item of (src.data || [])){
-      const n = item.node || item; // tolerate shapes
-      uniq.set(n.id, n);
-    }
-  }
-  // Score candidates
-  const scored = [];
-  for(const n of uniq.values()){
-    if(excludeIdSet.has(n.id)) continue; // on any status
-    const title = parseEnglishTitle(n);
-    const genres = (n.genres||[]).map(g=>g.name);
-    const studios = (n.studios||[]).map(s=>s.name);
-    const gOverlap = overlapCount(gTopSet, genres);
-    const sOverlap = overlapCount(sTopSet, studios);
-    if(gOverlap===0 && sOverlap===0) continue; // keep signal tight for phase 1
-
-    let base = 1 + gOverlap + sOverlap;
-    const mean = typeof n.mean === 'number' ? n.mean : 0;
-    base += mean * 0.02; // small quality nudge
-
-    let mult = 1;
-    if(bias.sbOn) mult *= (1 + (bias.sbW||0) * sOverlap);
-    if(bias.gbOn) mult *= (1 + (bias.gbW||0) * gOverlap);
-
-    const score = base * mult;
-    scored.push({
-      id:n.id, title, genres, studios, mean, score
+    var uniq = new Map();
+    results.forEach(function(src){
+      (src.data||[]).forEach(function(item){
+        var n = item.node || item;
+        uniq.set(n.id, n);
+      });
     });
-  }
-  scored.sort((a,b)=> b.score - a.score);
 
-  const picks = scored.slice(0, 12);
-  const recsEl = $('#recs');
-  recsEl.innerHTML = '';
-  for(const r of picks){
-    const div = document.createElement('div');
-    div.className = 'rec';
-    const rationale = rationaleText(r, gTopSet, sTopSet);
-    div.innerHTML = `
-      <h4><a href="${MAL_LINK(r.id)}" target="_blank" rel="noopener">${r.title}</a></h4>
-      <div class="small muted">${rationale}${r.mean ? ` · MAL mean ${r.mean.toFixed(1)}` : ''}</div>
-      <div class="chips" style="margin-top:6px;">
-        ${(r.genres||[]).slice(0,3).map(g=>`<span class="pill">${g}</span>`).join(' ')}
-        ${(r.studios||[]).slice(0,2).map(s=>`<span class="pill">${s}</span>`).join(' ')}
-      </div>
-    `;
-    recsEl.appendChild(div);
+    var scored = [];
+    uniq.forEach(function(n){
+      if(excludeIdSet.has(n.id)) return;
+      var title = parseEnglishTitle(n);
+      var genres = (n.genres||[]).map(function(g){ return g.name; });
+      var studios = (n.studios||[]).map(function(s){ return s.name; });
+      var gOverlap = overlapCount(gTopSet, genres);
+      var sOverlap = overlapCount(sTopSet, studios);
+      if(gOverlap===0 && sOverlap===0) return; // tight v1
+
+      var base = 1 + gOverlap + sOverlap;
+      var mean = typeof n.mean === 'number' ? n.mean : 0;
+      base += mean * 0.02;
+
+      var mult = 1;
+      if(bias.sbOn) mult *= (1 + (bias.sbW||0) * sOverlap);
+      if(bias.gbOn) mult *= (1 + (bias.gbW||0) * gOverlap);
+
+      scored.push({ id:n.id, title:title, genres:genres, studios:studios, mean:mean, score: base*mult });
+    });
+
+    scored.sort(function(a,b){ return b.score - a.score; });
+
+    var picks = scored.slice(0,12);
+    var recsEl = $('#recs'); recsEl.innerHTML = '';
+    picks.forEach(function(r){
+      var div = document.createElement('div');
+      div.className = 'rec';
+      var rationale = rationaleText(r, gTopSet, sTopSet);
+      div.innerHTML =
+        '<h4><a href="'+MAL_LINK(r.id)+'" target="_blank" rel="noopener">'+r.title+'</a></h4>'+
+        '<div class="small muted">'+rationale+(r.mean?(' · MAL mean '+r.mean.toFixed(1)):'')+'</div>'+
+        '<div class="chips" style="margin-top:6px;">'+
+        r.genres.slice(0,3).map(function(g){ return '<span class="pill">'+g+'</span>'; }).join(' ')+
+        r.studios.slice(0,2).map(function(s){ return ' <span class="pill">'+s+'</span>'; }).join('')+
+        '</div>';
+      recsEl.appendChild(div);
+    });
+  }catch(err){
+    $('#recs').innerHTML = '<div class="small error">Failed to generate recommendations: '+err.message+'</div>';
   }
 }
 
 /* ---------- Wire UI ---------- */
 $('#loadBtn').onclick = handleLoad;
-$('#csvBtn').onclick = () => download('rewatch.csv', toCSV(rewatchRows), 'text/csv');
-$('#mdBtn').onclick = () => download('rewatch.md', toMarkdown(rewatchRows), 'text/markdown');
-$('#copyMdBtn').onclick = async () => {
-  await navigator.clipboard.writeText(toMarkdown(rewatchRows));
-  alert('Markdown copied.');
-};
-$('#clearCacheBtn').onclick = () => {
-  Object.keys(localStorage).forEach(k => { if(k.startsWith('cache:anime:') || k==='cacheStats') localStorage.removeItem(k); });
+$('#csvBtn').onclick = function(){ download('rewatch.csv', toCSV(rewatchRows), 'text/csv'); };
+$('#mdBtn').onclick = function(){ download('rewatch.md', toMarkdown(rewatchRows), 'text/markdown'); };
+$('#copyMdBtn').onclick = async function(){ await navigator.clipboard.writeText(toMarkdown(rewatchRows)); alert('Markdown copied.'); };
+$('#clearCacheBtn').onclick = function(){
+  Object.keys(localStorage).forEach(function(k){
+    if(k.indexOf('cache:anime:')===0 || k==='cacheStats') localStorage.removeItem(k);
+  });
   alert('Cleared cached details.');
 };
 $('#searchBox').addEventListener('input', renderTable);
 $('#minScore').addEventListener('change', renderTable);
-$('#genreBiasOn').addEventListener('change', ()=>{ saveLS('bias', getBias()); renderTable(); });
-$('#studioBiasOn').addEventListener('change', ()=>{ saveLS('bias', getBias()); renderTable(); });
-$('#genreBiasW').addEventListener('change', ()=> saveLS('bias', getBias()));
-$('#studioBiasW').addEventListener('change', ()=> saveLS('bias', getBias()));
+$('#genreBiasOn').addEventListener('change', function(){ saveLS('bias', getBias()); renderTable(); });
+$('#studioBiasOn').addEventListener('change', function(){ saveLS('bias', getBias()); renderTable(); });
+$('#genreBiasW').addEventListener('change', function(){ saveLS('bias', getBias()); });
+$('#studioBiasW').addEventListener('change', function(){ saveLS('bias', getBias()); });
 $('#genRecsBtn').onclick = generateRecs;
 
-// restore saved bias
-const savedBias = loadLS('bias', null);
-if(savedBias){
-  $('#genreBiasOn').checked = !!savedBias.gbOn;
-  $('#studioBiasOn').checked = !!savedBias.sbOn;
-  if(typeof savedBias.gbW === 'number') $('#genreBiasW').value = savedBias.gbW;
-  if(typeof savedBias.sbW === 'number') $('#studioBiasW').value = savedBias.sbW;
-}
+// restore saved bias toggles
+(function(){
+  var savedBias = loadLS('bias', null);
+  if(savedBias){
+    $('#genreBiasOn').checked = !!savedBias.gbOn;
+    $('#studioBiasOn').checked = !!savedBias.sbOn;
+    if(typeof savedBias.gbW === 'number') $('#genreBiasW').value = savedBias.gbW;
+    if(typeof savedBias.sbW === 'number') $('#studioBiasW').value = savedBias.sbW;
+  }
+})();
 </script>
 </body>
 </html>
-
-
-
