@@ -1,73 +1,77 @@
 // netlify/functions/mal-proxy.js
-// Single proxy for both /api/animelist and /api/anime/:id
-// Adds nsfw=true so MAL returns ecchi/18+ items (nsfw: gray/black).
+const MAL_API = 'https://api.myanimelist.net/v2';
+const COOKIE_ACCESS = 'mal_access';
 
-const fetch = (...args) => import("node-fetch").then(({ default: f }) => f(...args));
-
-function parseCookies(cookieHeader = "") {
-  return Object.fromEntries(
-    cookieHeader.split(";").map((c) => {
-      const i = c.indexOf("=");
-      if (i === -1) return [c.trim(), ""];
-      return [c.slice(0, i).trim(), decodeURIComponent(c.slice(i + 1))];
-    })
-  );
+function readCookie(cookie, name) {
+  if (!cookie) return null;
+  const m = cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return m ? decodeURIComponent(m[1]) : null;
 }
 
-exports.handler = async (event) => {
-  try {
-    // Normalize path
-    let path = (event.path || "").replace("/.netlify/functions/mal-proxy", "");
-    if (path.startsWith("/api")) path = path.slice(4);
-    if (!path.startsWith("/")) path = "/" + path;
-
-    const qs = new URLSearchParams(event.queryStringParameters || {});
-    // Always include NSFW in requests to avoid hidden items
-    if (!qs.has("nsfw")) qs.set("nsfw", "true");
-    const qStr = qs.toString() ? `?${qs.toString()}` : "";
-
-    // 1) User's own animelist (needs OAuth access token)
-    if (path.startsWith("/animelist")) {
-      const access = parseCookies(event.headers.cookie || "").mal_access;
-      if (!access) return { statusCode: 401, body: "Not signed in." };
-
-      const base = "https://api.myanimelist.net/v2/users/@me/animelist";
-      const url = `${base}${qStr || "?nsfw=true"}`;
-      const resp = await fetch(url, { headers: { Authorization: `Bearer ${access}` } });
-      const text = await resp.text();
-      return { statusCode: resp.status, body: text, headers: { "Content-Type": "application/json" } };
-    }
-
-    // 2) Public anime details (uses Client ID)
-    if (path.startsWith("/anime/")) {
-      const clientId = process.env.MAL_CLIENT_ID;
-      if (!clientId) return { statusCode: 500, body: "Missing MAL_CLIENT_ID" };
-
-      const animeId = path.split("/")[2];
-      const base = `https://api.myanimelist.net/v2/anime/${animeId}`;
-      const url = `${base}${qStr || "?nsfw=true"}`;
-      const resp = await fetch(url, { headers: { "X-MAL-CLIENT-ID": clientId } });
-      const text = await resp.text();
-      return { statusCode: resp.status, body: text, headers: { "Content-Type": "application/json" } };
-    }
-
-    // 3) Logout helper
-    if (path.startsWith("/logout")) {
-      return {
-        statusCode: 200,
-        multiValueHeaders: {
-          "Set-Cookie": [
-            `mal_access=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`,
-            `mal_refresh=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`,
-          ],
-        },
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ok: true }),
-      };
-    }
-
-    return { statusCode: 404, body: `Not found: ${path}` };
-  } catch (e) {
-    return { statusCode: 500, body: e.message || "Proxy error" };
+function buildHeaders(event) {
+  const headers = { 'Content-Type': 'application/json' };
+  const access = readCookie(event.headers.cookie || event.headers.Cookie || '', COOKIE_ACCESS);
+  if (access) {
+    headers.Authorization = `Bearer ${access}`;
+  } else if (process.env.MAL_CLIENT_ID) {
+    headers['X-MAL-CLIENT-ID'] = process.env.MAL_CLIENT_ID;
   }
-};
+  return headers;
+}
+
+function appendNSFW(u) {
+  const url = new URL(u);
+  if (!url.searchParams.has('nsfw')) url.searchParams.set('nsfw', 'true');
+  return url.toString();
+}
+
+async function forward(url, event) {
+  const headers = buildHeaders(event);
+  const res = await fetch(appendNSFW(url), { headers });
+  const text = await res.text();
+  return new Response(text, {
+    status: res.status,
+    headers: { 'Content-Type': res.headers.get('content-type') || 'application/json' }
+  });
+}
+
+export async function handler(event) {
+  try {
+    const { path, queryStringParameters } = event;
+    // /api/animelist -> v2/users/@me/animelist
+    if (path.endsWith('/api/animelist')) {
+      const qs = new URLSearchParams(queryStringParameters || {});
+      const url = `${MAL_API}/users/@me/animelist?${qs.toString()}`;
+      return await forward(url, event);
+    }
+    // /api/anime/:id -> v2/anime/{id}
+    const animeMatch = path.match(/\/api\/anime\/(\d+)/);
+    if (animeMatch) {
+      const id = animeMatch[1];
+      const qs = new URLSearchParams(queryStringParameters || {});
+      const url = `${MAL_API}/anime/${id}?${qs.toString()}`;
+      return await forward(url, event);
+    }
+    // /api/anime-ranking -> v2/anime/ranking
+    if (path.endsWith('/api/anime-ranking')) {
+      const qs = new URLSearchParams(queryStringParameters || {});
+      // default ranking_type if not provided
+      if (!qs.has('ranking_type')) qs.set('ranking_type', 'bypopularity');
+      if (!qs.has('limit')) qs.set('limit', '100');
+      // fields default used by frontend; safe to pass through
+      const url = `${MAL_API}/anime/ranking?${qs.toString()}`;
+      return await forward(url, event);
+    }
+
+    // 404
+    return {
+      statusCode: 404,
+      body: JSON.stringify({ error: 'Not found' })
+    };
+  } catch (err) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'proxy_error', message: err.message })
+    };
+  }
+}
