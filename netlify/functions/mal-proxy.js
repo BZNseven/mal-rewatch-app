@@ -1,5 +1,6 @@
-// Normalizes /api/* → /* so our route checks work.
-// Uses multiValueHeaders for multiple Set-Cookie values.
+// netlify/functions/mal-proxy.js
+// Single proxy for both /api/animelist and /api/anime/:id
+// Adds nsfw=true so MAL returns ecchi/18+ items (nsfw: gray/black).
 
 const fetch = (...args) => import("node-fetch").then(({ default: f }) => f(...args));
 
@@ -15,43 +16,42 @@ function parseCookies(cookieHeader = "") {
 
 exports.handler = async (event) => {
   try {
-    // Example path: "/.netlify/functions/mal-proxy/api/animelist"
+    // Normalize path
     let path = (event.path || "").replace("/.netlify/functions/mal-proxy", "");
     if (path.startsWith("/api")) path = path.slice(4);
     if (!path.startsWith("/")) path = "/" + path;
 
-    const qs = new URLSearchParams(event.queryStringParameters || {}).toString();
-    const qStr = qs ? `?${qs}` : "";
+    const qs = new URLSearchParams(event.queryStringParameters || {});
+    // Always include NSFW in requests to avoid hidden items
+    if (!qs.has("nsfw")) qs.set("nsfw", "true");
+    const qStr = qs.toString() ? `?${qs.toString()}` : "";
 
+    // 1) User's own animelist (needs OAuth access token)
     if (path.startsWith("/animelist")) {
-      // Requires user access token
       const access = parseCookies(event.headers.cookie || "").mal_access;
       if (!access) return { statusCode: 401, body: "Not signed in." };
 
       const base = "https://api.myanimelist.net/v2/users/@me/animelist";
-      const url = qStr
-        ? `${base}${qStr}`
-        : `${base}?limit=100&fields=list_status{tags,score,status,is_rewatching,num_times_rewatched,rewatch_value}`;
+      const url = `${base}${qStr || "?nsfw=true"}`;
       const resp = await fetch(url, { headers: { Authorization: `Bearer ${access}` } });
       const text = await resp.text();
       return { statusCode: resp.status, body: text, headers: { "Content-Type": "application/json" } };
     }
 
+    // 2) Public anime details (uses Client ID)
     if (path.startsWith("/anime/")) {
-      // Public anime details (no user token), but needs Client ID
       const clientId = process.env.MAL_CLIENT_ID;
       if (!clientId) return { statusCode: 500, body: "Missing MAL_CLIENT_ID" };
 
       const animeId = path.split("/")[2];
       const base = `https://api.myanimelist.net/v2/anime/${animeId}`;
-      const url = qStr
-        ? `${base}${qStr}`
-        : `${base}?fields=genres,studios,start_season,num_episodes,media_type`;
+      const url = `${base}${qStr || "?nsfw=true"}`;
       const resp = await fetch(url, { headers: { "X-MAL-CLIENT-ID": clientId } });
       const text = await resp.text();
       return { statusCode: resp.status, body: text, headers: { "Content-Type": "application/json" } };
     }
 
+    // 3) Logout helper
     if (path.startsWith("/logout")) {
       return {
         statusCode: 200,
