@@ -55,7 +55,10 @@
     .recs { display:grid; gap:8px; }
     .rec { background:#121723; border:1px solid var(--border); border-radius:10px; padding:10px; position:relative; }
     .rec h4 { margin:0 0 4px; font-size:15px; }
-    .pill { font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#1a1f2b; color:#bfc5d3; }
+    .pill { font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#1a1f2b; color:#bfc5d3; display:inline-block; white-space:nowrap; }
+    /* Rec rationale badges (only these get color changes) */
+    .pill.badge-ptw { background:#0f2a44; border-color:#1b4fb6; color:#cfe3ff; }
+    .pill.badge-onhold { background:#2a1144; border-color:#7c3aed; color:#eadcff; }
     .right { text-align:right; }
     .small { font-size:12px; }
     .authed-only { display:none; }
@@ -707,10 +710,10 @@ function take(r, arr){
 
     // PTW/On-Hold badges
     function badgeHTML(id){
-      if(ptwIdSet.has(id)) return ' <span class="pill">on your plan to watch</span>';
-      if(onHoldIdSet.has(id)) return ' <span class="pill">on hold</span>';
-      return '';
-    }
+  if (ptwIdSet.has(id)) return ' <span class="pill badge-ptw">PTW</span>';
+  if (onHoldIdSet.has(id)) return ' <span class="pill badge-onhold">On-Hold</span>';
+  return '';
+}
 
     // Render (use gTopSet / sTopSet already defined)
     var recsEl = $('#recs');
@@ -786,6 +789,7 @@ $('#genRecsBtn').onclick = generateRecs;
 </script>
 </body>
 </html>
+
 
 
 
